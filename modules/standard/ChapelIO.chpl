@@ -892,9 +892,9 @@ module ChapelIO {
   //
   // This version only applies to non-primitive types
   // (primitive types should support :string directly)
-  pragma "no doc"
-  pragma "last resort"
-  operator :(x, type t:string) where !isPrimitiveType(x.type) {
-    return stringify(x);
-  }
+  // pragma "no doc"
+  // pragma "last resort"
+  // operator :(x, type t:string) where !isPrimitiveType(x.type) {
+  //   return stringify(x);
+  // }
 }
