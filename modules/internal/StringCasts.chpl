@@ -83,7 +83,7 @@ module StringCasts {
     compilerError("Cannot cast tuple of non-primitive types to string");
   }
 
-  operator :(x: ?t, type s:string) where !isHomogeneousTupleType(t) {
+  operator :(x: ?t, type s:string) where isTupleType(t) && !isHomogeneousTupleType(t) {
     compilerError("Cannot cast non-homogenous tuple types to string");
   }
 
