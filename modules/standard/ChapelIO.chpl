@@ -897,4 +897,8 @@ module ChapelIO {
   // operator :(x, type t:string) where !isPrimitiveType(x.type) {
   //   return stringify(x);
   // }
+
+  pragma "no doc"
+  pragma "last resort"
+  operator : (type x, type t: string) { }
 }

@@ -56,6 +56,37 @@ module StringCasts {
     return false;
   }
 
+  // primitive homogenous tuples
+  operator :(x: ?k*?t, type s:string)
+     where isPrimitiveType(t) ||
+           t == string ||
+           t == bytes ||
+           t == c_string
+ {
+    var ret = "(";
+    for param i in 0..<k {
+      if i != 0 then ret += ", ";
+      if (tup[i].type == c_string) {
+        try! {
+          ret += createStringWithNewBuffer(tup[i]);
+        }
+      }
+      else {
+        ret += tup[i]:string;
+      }
+    }
+    ret += ")";
+    return ret;
+  }
+
+  operator :(x: ?k*?t, type s:string) where !isPrimitiveType(t) {
+    compilerError("Cannot cast tuple of non-primitive types to string");
+  }
+
+  operator :(x: ?t, type s:string) where !isHomogeneousTupleType(t) {
+    compilerError("Cannot cast non-homogenous tuple types to string");
+  }
+
   //
   // int
   //
