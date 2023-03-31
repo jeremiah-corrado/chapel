@@ -79,7 +79,7 @@ module StringCasts {
     return ret;
   }
 
-  operator :(x: ?k*?t, type s:string) where !isPrimitiveType(t) {
+  operator :(x: ?k*?t, type s:string) where !isPrimitiveType(t) && t != string && t != bytes && t != c_string {
     compilerError("Cannot cast tuple of non-primitive types to string");
   }
 
