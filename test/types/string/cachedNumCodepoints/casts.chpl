@@ -1,5 +1,6 @@
 proc test(val) {
-  writeln((val:string).cachedNumCodepoints);
+  var x = val: string;
+  writeln(x.cachedNumCodepoints);
 }
 
 test(1);
