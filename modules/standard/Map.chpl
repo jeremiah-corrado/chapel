@@ -375,7 +375,7 @@ module Map {
       var (isFull, slot) = table.findFullSlot(k);
 
       if !isFull then
-        throw new KeyNotFoundError(k:string);
+        throw new KeyNotFoundError(k);
 
       // TODO: Use table key or argument key?
       const ref key = table.table[slot].key;
@@ -431,7 +431,7 @@ module Map {
       _enter(); defer _leave();
       var (found, slot) = table.findFullSlot(k);
       if !found then
-        throw new KeyNotFoundError(k:string);
+        throw new KeyNotFoundError(k);
       const result = table.table[slot].val;
       return result;
     }
@@ -444,7 +444,7 @@ module Map {
       _enter(); defer _leave();
       var (found, slot) = table.findFullSlot(k);
       if !found then
-        throw new KeyNotFoundError(k:string);
+        throw new KeyNotFoundError(k);
       const ref result = table.table[slot].val;
       return result;
     }
@@ -455,7 +455,7 @@ module Map {
       _enter(); defer _leave();
       var (found, slot) = table.findFullSlot(k);
       if !found then
-        throw new KeyNotFoundError(k:string);
+        throw new KeyNotFoundError(k);
       try! {
         var result = table.table[slot].val.borrow();
         if isNonNilableClass(valType) {
@@ -518,7 +518,7 @@ module Map {
       _enter(); defer _leave();
       var (found, slot) = table.findFullSlot(k);
       if !found then
-        throw new KeyNotFoundError(k: string);
+        throw new KeyNotFoundError(k);
       try! {
         const result = table.table[slot].val: valType;
         return result;
@@ -961,9 +961,18 @@ module Map {
   class KeyNotFoundError : Error {
     proc init() {}
 
-    proc init(k: string) {
-      var msg = "key '" + k + "' not found";
-      super.init(msg);
-    }
+    // proc init(k: string) {
+    //   var msg = "key '" + k + "' not found";
+    //   super.init(msg);
+    // }
+
+    proc init(k) where isPrimitiveType(k.type) {
+	    super.init("key '" + k:string + "' not found");
+	  }
+
+	  proc init(k) where !isPrimitiveType(k.type) {
+      use IO;
+	  	super.init(stringify("key '", k, "' not found"));
+	  }
   }
 }
