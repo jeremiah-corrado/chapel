@@ -2897,6 +2897,7 @@ qioerr _qio_buffered_write(qio_channel_t* ch, const void* ptr, ssize_t len, ssiz
 
   // if possible make a direct system call instead of buffering
   if (
+    false &&
     toWriteTotal >= qio_write_unbuffered_threshold && // the write is large enough
     method != QIO_METHOD_MMAP &&             // we aren't using mmap
     method != QIO_METHOD_MEMORY &&           // we aren't using mem
