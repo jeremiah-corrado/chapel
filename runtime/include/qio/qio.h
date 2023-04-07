@@ -237,6 +237,7 @@ typedef enum {
   QIO_METHOD_FREADFWRITE = 3*QIO_HINT_AFTERCHTYPE,
   QIO_METHOD_MMAP = 4*QIO_HINT_AFTERCHTYPE,
   QIO_METHOD_MEMORY = 5*QIO_HINT_AFTERCHTYPE,
+  QIO_METHOD_STRBUF = 6*QIO_HINT_AFTERCHTYPE
   //QIO_METHOD_LIBEVENT,
 } qio_method_t;
 #define QIO_METHODMASK 0x00f0
@@ -377,6 +378,9 @@ typedef struct qio_file_s {
                   // Note a qbuffer is not thread-safe, and
                   // so access to this must be protected
                   // by the file's lock.
+
+  char* str_buf;
+  int64_t str_buf_len;
 
   //void* fs_info; // Holds the filesystem information (as a user defined struct)
   void* file_info; // Holds the file information (as a user defined struct)

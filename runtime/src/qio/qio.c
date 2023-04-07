@@ -823,6 +823,8 @@ qioerr qio_file_init(qio_file_t** file_out, FILE* fp, fd_t fd, qio_hint_t iohint
   file->fd = fd;
   file->use_fp = usefilestar;
   file->buf = NULL;
+  file->str_buf = NULL;
+  file->str_buf_len = 0;
   file->fdflags = fdflags;
   file->closed = false;
   file->initial_length = initial_length;
@@ -906,6 +908,8 @@ qioerr qio_file_init_plugin(qio_file_t** file_out, void* file_info, int fdflags,
   file->fd = -1;
   file->use_fp = 0;
   file->buf = NULL;
+  file->str_buf = NULL;
+  file->str_buf_len = 0;
   file->fdflags = (qio_fdflag_t) fdflags;
   file->closed = false;
   file->initial_length = initial_length;
@@ -2082,6 +2086,28 @@ error:
   return err;
 }
 
+static _buffered_get_strbuf(qio_channel_t* ch, int64_t amt, int writing)
+{
+  qioerr err = 0;
+
+  if !writing {
+    return err;
+  }
+
+  if ch->file->str_buf_len < amt {
+      char* newbuf = (char*) qio_realloc(ch->file->str_buf, ch->file->str_buf_len + amt);
+      if ( !newbuf ) {
+        qio_free(ch->file->str_buf)
+        return QIO_ENOMEM;
+      }
+      ch->file->str_buf = newbuf;
+      ch->file->str_buf_len += amt;
+    }
+  }
+
+  return err;
+}
+
 
 static
 qioerr _buffered_get_memory(qio_channel_t* ch, int64_t amt, int writing)
@@ -2287,6 +2313,7 @@ qioerr _buffered_read_atleast(qio_channel_t* ch, int64_t amt)
         break;
       case QIO_METHOD_MMAP:
       case QIO_METHOD_MEMORY:
+      case QIO_METHOD_STRBUF:
         // should've been handled outside this method!
         QIO_GET_CONSTANT_ERROR(err, EINVAL, "internal error");
         break;
@@ -2713,6 +2740,9 @@ qioerr _qio_buffered_behind(qio_channel_t* ch, int flushall)
           num_written = qbuffer_iter_num_bytes(write_start, write_end);
           break;
         // no default to get warnings when new methods are added
+        case QIO_METHOD_STRBUF:
+          // QIO_GET_CONSTANT_ERROR(err, EINVAL, "internal error");
+          break;
       }
       qbuffer_iter_advance(&ch->buf, &write_start, num_written);
 
@@ -2778,6 +2808,8 @@ qioerr _qio_channel_require_unlocked(qio_channel_t* ch, int64_t amt, int writing
     err = _buffered_get_mmap(ch, n_needed, writing);
   } else if( (ch->hints & QIO_METHODMASK) == QIO_METHOD_MEMORY ) {
     err = _buffered_get_memory(ch, n_needed, writing);
+  } else if ( (ch->hints & QIO_METHODMASK) == QIO_METHOD_STRBUF ) {
+    err = _buffered_get_strbuf(ch, n_needed, writing);
   } else {
     if( ch->flags & QIO_FDFLAG_READABLE ) {
       // we're reading the data. So read some data!
@@ -2975,10 +3007,14 @@ qioerr _qio_buffered_write(qio_channel_t* ch, const void* ptr, ssize_t len, ssiz
       if( toWriteBuffer < gotlen ) gotlen = toWriteBuffer;
       qbuffer_iter_advance(&ch->buf, &end, gotlen);
 
-      // now copy the data in to the buffer.
-      err = qbuffer_copyin(&ch->buf, start, end, (char *) ptr + (toWriteTotal-remaining),
-                          gotlen);
-      if( err ) goto error;
+      if ( method == QIO_METHOD_STRBUF ) {
+        err = qio_memcpy(&ch->file->strbuf, (char *) ptr + (toWriteTotal-remaining), gotlen);
+      } else {
+        // now copy the data in to the buffer.
+        err = qbuffer_copyin(&ch->buf, start, end, (char *) ptr + (toWriteTotal-remaining),
+                            gotlen);
+        if( err ) goto error;
+      }
 
       // now move start forward.
       _set_right_mark_start(ch, end.offset);
