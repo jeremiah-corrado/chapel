@@ -878,6 +878,8 @@ extern const QIO_METHOD_FREADFWRITE:c_int;
 pragma "no doc"
 extern const QIO_METHOD_MMAP:c_int;
 pragma "no doc"
+extern const QIO_METHOD_STRBUF:c_int;
+pragma "no doc"
 extern const QIO_METHODMASK:c_int;
 pragma "no doc"
 extern const QIO_HINT_RANDOM:c_int;
@@ -1206,7 +1208,7 @@ private extern proc qio_file_retain(f:qio_file_ptr_t);
 private extern proc qio_file_release(f:qio_file_ptr_t);
 
 private extern proc qio_file_init(ref file_out:qio_file_ptr_t, fp: c_FILE, fd:c_int, iohints:c_int, const ref style:iostyleInternal, usefilestar:c_int):errorCode;
-private extern proc qio_str_file_init(ref file_out:qio_file_ptr_t, buf: c_ptr(uint(8)), len: c_int, iohints:c_int, const ref style:iostyleInternal):errorCode;
+private extern proc qio_str_file_init(ref file_out:qio_file_ptr_t, buf: c_ptr(uint(8)), buflen: c_long, iohints:c_int, const ref style:iostyleInternal):errorCode;
 private extern proc qio_file_open_access(ref file_out:qio_file_ptr_t, path:c_string, access:c_string, iohints:c_int, const ref style:iostyleInternal):errorCode;
 private extern proc qio_file_open_tmp(ref file_out:qio_file_ptr_t, iohints:c_int, const ref style:iostyleInternal):errorCode;
 private extern proc qio_file_open_mem(ref file_out:qio_file_ptr_t, buf:qbuffer_ptr_t, const ref style:iostyleInternal):errorCode;
@@ -1526,6 +1528,7 @@ private const IOHINTS_RANDOM:      c_int = QIO_HINT_RANDOM;
 private const IOHINTS_PREFETCH:    c_int = QIO_HINT_CACHED;
 private const IOHINTS_MMAP:        c_int = QIO_METHOD_MMAP;
 private const IOHINTS_NOMMAP:      c_int = QIO_METHOD_PREADPWRITE;
+private const IOHINTS_STRBUF:      c_int = QIO_METHOD_STRBUF;
 
 /* A value of the :record:`ioHintSet` type defines a set of hints to provide
   information about the operations that a :record:`file`, :record:`fileReader`
@@ -1652,7 +1655,7 @@ record file {
 
 
 @chpldoc.nodoc
-proc file.init(s: string, hints: ioHintSet=ioHintSet.empty) {
+proc file.init(s: string, hints: ioHintSet=ioHintSet.fromFlag(QIO_METHOD_STRBUF)) {
   this._home = s.locale;
   this.complete();
 
@@ -2833,10 +2836,12 @@ operator fileWriter.=(ref lhs:fileWriter, rhs:fileWriter) {
 }
 
 /*
-  create a fileWriter to a string's buffer
+  create a fileWriter directly to a string's buffer
 */
 proc fileWriter.init(s: string) {
-  var f:file = new file(s);
+  var f:file = new file(s),
+      err: errorCode;
+  this.init(iokind.native, false, new DefaultWriter(), f, err, ioHintSet.fromFlag(QIO_METHOD_STRBUF), 0, max(int), defaultIOStyleInternal());
 }
 
 

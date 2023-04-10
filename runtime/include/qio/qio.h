@@ -445,7 +445,7 @@ qioerr qio_pwritev(qio_file_t* file, qbuffer_t* buf, qbuffer_iter_t start, qbuff
 // if fp is not null, fd is ignored; if fp is null, we use fd.
 // the QIO file takes ownership of fp or fd, closing it when the QIO file is closed.
 qioerr qio_file_init(qio_file_t** file_out, FILE* fp, fd_t fd, qio_hint_t iohints, const qio_style_t* style, int usefilestar);
-qioerr qio_str_file_init(qio_file_t** file_out, char* str_buf, int64_t len, qio_hint_t iohints, const qio_style_t* style);
+qioerr qio_str_file_init(qio_file_t** file_out, char* str_buf, int64_t buf_len, qio_hint_t iohints, const qio_style_t* style);
 qioerr qio_file_open(qio_file_t** file_out, const char* path, int flags, mode_t mode, qio_hint_t iohints, const qio_style_t* style);
 qioerr qio_file_open_access(qio_file_t** file_out, const char* pathname, const char* access, qio_hint_t iohints, const qio_style_t* style);
 qioerr qio_file_open_mem_ext(qio_file_t** file_out, qbuffer_t* buf, qio_fdflag_t fdflags, qio_hint_t iohints, const qio_style_t* style);

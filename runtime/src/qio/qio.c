@@ -711,28 +711,37 @@ qioerr qio_mmap_initial(qio_file_t* file)
   return 0;
 }
 
-qioerr qio_str_file_init(qio_file_t** file_out, char* str_buf, int64_t len, qio_hint_t iohints, const qio_style_t* style)
+qioerr qio_str_file_init(qio_file_t** file_out, char* str_buf, int64_t buf_len, qio_hint_t iohints, const qio_style_t* style)
 {
   qio_file_t* file = NULL;
+  qioerr err;
 
   file = (qio_file_t*) qio_calloc(sizeof(qio_file_t), 1);
   if( ! file ) {
     return QIO_ENOMEM;
   }
 
+  DO_INIT_REFCNT(file);
   file->fd = -1;
   file->fp = NULL;
-  file->fdflags = (qio_fdflag_t) 0;
+  file->fdflags = (qio_fdflag_t) QIO_FDFLAG_WRITEABLE;
   file->hints = iohints;
   file->str_buf = str_buf;
-  file->str_buf_len = len;
+  file->str_buf_len = buf_len;
   file->closed = false;
-  file->initial_length = len;
+  file->initial_length = buf_len;
   file->initial_pos = 0;
   file->file_info = NULL;
+  file->mmap = NULL;
 
   if( style ) qio_style_copy(&file->style, style);
   else qio_style_init_default(&file->style);
+
+  err = qio_lock_init(&file->lock);
+  if( err ) {
+    qio_free(file);
+    return err;
+  }
 
   *file_out = file;
 
@@ -851,7 +860,7 @@ qioerr qio_file_init(qio_file_t** file_out, FILE* fp, fd_t fd, qio_hint_t iohint
   file->use_fp = usefilestar;
   file->buf = NULL;
   file->str_buf = NULL;
-  file->str_buf_len = 0;
+  file->str_buf_len = -1;
   file->fdflags = fdflags;
   file->closed = false;
   file->initial_length = initial_length;
@@ -979,7 +988,8 @@ qioerr _qio_file_do_close(qio_file_t* f)
   const char* path;
   int rc;
 
-  //printf("closing %p fd %i fp %p\n", f, f->fd, f->fp);
+  printf("closing %p fd %i fp %p\n", f, f->fd, f->fp);
+  fflush(stdout);
 
 
   err = qio_lock(& f->lock);
@@ -3015,40 +3025,45 @@ qioerr _qio_buffered_write(qio_channel_t* ch, const void* ptr, ssize_t len, ssiz
   } else {
     // otherwise, do a buffered write
     while ((remaining > 0) && !eof) {
-      if ((ch->bufIoMax > 0) && (remaining > ch->bufIoMax)) {
-        toWriteBuffer = ch->bufIoMax;
-      } else {
-        toWriteBuffer = remaining;
-      }
-
-      // make sure we have buffer space. (require calls advance_cached)
-      err = _qio_channel_require_unlocked(ch, toWriteBuffer, 1);
-      eof = 0;
-      if( qio_err_to_int(err) == EEOF ) eof = 1;
-      else if( err ) goto error;
-
-      // figure out the end of the data to copy
-      start = _right_mark_start_iter(ch);
-      end = start;
-      gotlen = qbuffer_iter_num_bytes_after(&ch->buf, end);
-      if( toWriteBuffer < gotlen ) gotlen = toWriteBuffer;
-      qbuffer_iter_advance(&ch->buf, &end, gotlen);
-
       if ( method == QIO_METHOD_STRBUF ) {
+        gotlen = remaining;
+
         err = qio_memcpy(&ch->file->str_buf, (char *) ptr + (toWriteTotal-remaining), gotlen);
+        if (err) goto error;
+
+        _add_right_mark_start(ch, remaining);
       } else {
+        if ((ch->bufIoMax > 0) && (remaining > ch->bufIoMax)) {
+          toWriteBuffer = ch->bufIoMax;
+        } else {
+          toWriteBuffer = remaining;
+        }
+
+        // make sure we have buffer space. (require calls advance_cached)
+        err = _qio_channel_require_unlocked(ch, toWriteBuffer, 1);
+        eof = 0;
+        if( qio_err_to_int(err) == EEOF ) eof = 1;
+        else if( err ) goto error;
+
+        // figure out the end of the data to copy
+        start = _right_mark_start_iter(ch);
+        end = start;
+        gotlen = qbuffer_iter_num_bytes_after(&ch->buf, end);
+        if( toWriteBuffer < gotlen ) gotlen = toWriteBuffer;
+        qbuffer_iter_advance(&ch->buf, &end, gotlen);
+
         // now copy the data in to the buffer.
         err = qbuffer_copyin(&ch->buf, start, end, (char *) ptr + (toWriteTotal-remaining),
                             gotlen);
         if( err ) goto error;
+
+        // now move start forward.
+        _set_right_mark_start(ch, end.offset);
+
+        // did we get to a different part? If so, call write()
+        err = _qio_buffered_behind(ch, false);
+        if( err ) goto error;
       }
-
-      // now move start forward.
-      _set_right_mark_start(ch, end.offset);
-
-      // did we get to a different part? If so, call write()
-      err = _qio_buffered_behind(ch, false);
-      if( err ) goto error;
       remaining -= gotlen;
     }
   }
