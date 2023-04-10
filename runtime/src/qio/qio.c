@@ -711,6 +711,33 @@ qioerr qio_mmap_initial(qio_file_t* file)
   return 0;
 }
 
+qioerr qio_str_file_init(qio_file_t** file_out, char* str_buf, int64_t len, qio_hint_t iohints, const qio_style_t* style)
+{
+  qio_file_t* file = NULL;
+
+  file = (qio_file_t*) qio_calloc(sizeof(qio_file_t), 1);
+  if( ! file ) {
+    return QIO_ENOMEM;
+  }
+
+  file->fd = -1;
+  file->fp = NULL;
+  file->fdflags = (qio_fdflag_t) 0;
+  file->hints = iohints;
+  file->str_buf = str_buf;
+  file->str_buf_len = len;
+  file->closed = false;
+  file->initial_length = len;
+  file->initial_pos = 0;
+  file->file_info = NULL;
+
+  if( style ) qio_style_copy(&file->style, style);
+  else qio_style_init_default(&file->style);
+
+  *file_out = file;
+
+  return 0;
+}
 
 qioerr qio_file_init(qio_file_t** file_out, FILE* fp, fd_t fd, qio_hint_t iohints, const qio_style_t* style, int usefilestar)
 {
@@ -2086,23 +2113,23 @@ error:
   return err;
 }
 
-static _buffered_get_strbuf(qio_channel_t* ch, int64_t amt, int writing)
+static
+qioerr _buffered_get_strbuf(qio_channel_t* ch, int64_t amt, int writing)
 {
   qioerr err = 0;
 
-  if !writing {
+  if ( !writing ) {
     return err;
   }
 
-  if ch->file->str_buf_len < amt {
-      char* newbuf = (char*) qio_realloc(ch->file->str_buf, ch->file->str_buf_len + amt);
-      if ( !newbuf ) {
-        qio_free(ch->file->str_buf)
-        return QIO_ENOMEM;
-      }
-      ch->file->str_buf = newbuf;
-      ch->file->str_buf_len += amt;
+  if ( ch->file->str_buf_len < amt ) {
+    char* newbuf = (char*) qio_realloc(ch->file->str_buf, ch->file->str_buf_len + amt);
+    if ( !newbuf ) {
+      qio_free(ch->file->str_buf);
+      return QIO_ENOMEM;
     }
+    ch->file->str_buf = newbuf;
+    ch->file->str_buf_len += amt;
   }
 
   return err;
@@ -2962,8 +2989,8 @@ qioerr _qio_buffered_write(qio_channel_t* ch, const void* ptr, ssize_t len, ssiz
           }
           break;
           case QIO_METHOD_MMAP:
-          break;
           case QIO_METHOD_MEMORY:
+          case QIO_METHOD_STRBUF:
           break;
       }
       if( err ) {
@@ -3008,7 +3035,7 @@ qioerr _qio_buffered_write(qio_channel_t* ch, const void* ptr, ssize_t len, ssiz
       qbuffer_iter_advance(&ch->buf, &end, gotlen);
 
       if ( method == QIO_METHOD_STRBUF ) {
-        err = qio_memcpy(&ch->file->strbuf, (char *) ptr + (toWriteTotal-remaining), gotlen);
+        err = qio_memcpy(&ch->file->str_buf, (char *) ptr + (toWriteTotal-remaining), gotlen);
       } else {
         // now copy the data in to the buffer.
         err = qbuffer_copyin(&ch->buf, start, end, (char *) ptr + (toWriteTotal-remaining),
@@ -3109,6 +3136,10 @@ qioerr _qio_unbuffered_write(qio_channel_t* ch, const void* ptr, ssize_t len_in,
           */
           QIO_GET_CONSTANT_ERROR(err, EINVAL, "not supported for memory file");
           break;
+        case QIO_METHOD_STRBUF:
+          QIO_GET_CONSTANT_ERROR(err, EINVAL, "not supported for string buffer");
+          // TODO: maybe implement this? (might be deprecated anyway)
+
         // no default to get warnings when new methods are added
       }
       if( err ) {
@@ -3201,6 +3232,9 @@ qioerr _qio_unbuffered_read(qio_channel_t* ch, void* ptr, ssize_t len_in, ssize_
           */
           QIO_GET_CONSTANT_ERROR(err, EINVAL, "not supported for memory file");
           break;
+        case QIO_METHOD_STRBUF:
+          // TODO: implement reading from string buffer
+          QIO_GET_CONSTANT_ERROR(err, EINVAL, "not yet supported for string buffer");
         // no default to get warnings when new methods are added
       }
       // Return early on an error or on EOF.

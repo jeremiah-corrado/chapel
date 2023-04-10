@@ -1206,6 +1206,7 @@ private extern proc qio_file_retain(f:qio_file_ptr_t);
 private extern proc qio_file_release(f:qio_file_ptr_t);
 
 private extern proc qio_file_init(ref file_out:qio_file_ptr_t, fp: c_FILE, fd:c_int, iohints:c_int, const ref style:iostyleInternal, usefilestar:c_int):errorCode;
+private extern proc qio_str_file_init(ref file_out:qio_file_ptr_t, buf: c_ptr(uint(8)), len: c_int, iohints:c_int, const ref style:iostyleInternal):errorCode;
 private extern proc qio_file_open_access(ref file_out:qio_file_ptr_t, path:c_string, access:c_string, iohints:c_int, const ref style:iostyleInternal):errorCode;
 private extern proc qio_file_open_tmp(ref file_out:qio_file_ptr_t, iohints:c_int, const ref style:iostyleInternal):errorCode;
 private extern proc qio_file_open_mem(ref file_out:qio_file_ptr_t, buf:qbuffer_ptr_t, const ref style:iostyleInternal):errorCode;
@@ -1646,6 +1647,17 @@ record file {
   // be built even when handwritten initializers (copy init) exist.
   pragma "no doc"
   proc init() {
+  }
+}
+
+
+@chpldoc.nodoc
+proc file.init(s: string, hints: ioHintSet=ioHintSet.empty) {
+  this._home = s.locale;
+  this.complete();
+
+  on this._home {
+    var err = qio_str_file_init(this._file_internal, s.buff, s.buffSize, hints._internal, defaultIOStyleInternal());
   }
 }
 
@@ -2819,6 +2831,14 @@ operator fileWriter.=(ref lhs:fileWriter, rhs:fileWriter) {
   lhs._home = rhs._home;
   lhs._channel_internal = rhs._channel_internal;
 }
+
+/*
+  create a fileWriter to a string's buffer
+*/
+proc fileWriter.init(s: string) {
+  var f:file = new file(s);
+}
+
 
 pragma "no doc"
 proc fileReader.init(param kind:iokind, param locking:bool, type fmtType) {
