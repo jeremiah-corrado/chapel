@@ -724,6 +724,7 @@ qioerr qio_str_file_init(qio_file_t** file_out, char* str_buf, int64_t buf_len, 
   DO_INIT_REFCNT(file);
   file->fd = -1;
   file->fp = NULL;
+  file->use_fp = 0;
   file->fdflags = (qio_fdflag_t) QIO_FDFLAG_WRITEABLE;
   file->hints = iohints;
   file->str_buf = str_buf;
@@ -731,6 +732,7 @@ qioerr qio_str_file_init(qio_file_t** file_out, char* str_buf, int64_t buf_len, 
   file->closed = false;
   file->initial_length = buf_len;
   file->initial_pos = 0;
+  file->max_initial_position = -1;
   file->file_info = NULL;
   file->mmap = NULL;
 
@@ -988,9 +990,8 @@ qioerr _qio_file_do_close(qio_file_t* f)
   const char* path;
   int rc;
 
-  printf("closing %p fd %i fp %p\n", f, f->fd, f->fp);
-  fflush(stdout);
-
+  // printf("closing %p fd %i fp %p\n", f, f->fd, f->fp);
+  // fflush(stdout);
 
   err = qio_lock(& f->lock);
   if( err ) return err;
@@ -1760,13 +1761,15 @@ qioerr qio_channel_path_offset(const int threadsafe, qio_channel_t* ch, const ch
 
   *offset_out = qio_channel_offset_unlocked(ch);
 
-  if (ch->file) {
+  if (ch->file && ch->file->str_buf == NULL ) {
     err = qio_file_path(ch->file, &tmp);
     if( !err ) {
       err = qio_shortest_path(ch->file, string_out, tmp);
     }
 
     qio_free((void*) tmp);
+  } else {
+    *string_out = "";
   }
 
   if( threadsafe ) {
@@ -1787,6 +1790,9 @@ qioerr _qio_channel_final_flush_unlocked(qio_channel_t* ch)
   struct stat stats;
   int destroyed_buffer = 0;
 
+  // printf("Strbuf method: %d\n", method == QIO_METHOD_STRBUF);
+  // fflush(stdout);
+
   if( type == QIO_CHTYPE_CLOSED ) return 0;
   if( ! ch->file ) return 0;
 
@@ -1798,6 +1804,9 @@ qioerr _qio_channel_final_flush_unlocked(qio_channel_t* ch)
     QIO_RETURN_CONSTANT_ERROR(EINVAL,
         "file closed before writing channel closed --"
         " please close all writing channels before closing the file");
+
+  // printf("flushing...\n");
+  // fflush(stdout);
 
   err = _qio_channel_flush_unlocked(ch);
   if( ! err ) {
@@ -1854,12 +1863,21 @@ qioerr _qio_channel_final_flush_unlocked(qio_channel_t* ch)
   // Make a note of any error from flush/truncate so we don't forget it
   flush_or_truncate_error = err;
 
+  // printf("end pos...\n");
+  // fflush(stdout);
+
   // set end_pos to the current position.
   ch->end_pos = qio_channel_offset_unlocked(ch);
+
+  // printf("plugin...\n");
+  // fflush(stdout);
 
   // Close plugin structure if any
   if (ch->chan_info != NULL)
     chpl_qio_channel_close(ch->chan_info);
+
+  // printf("clean buffer...\n");
+  // fflush(stdout);
 
   if( !destroyed_buffer && qbuffer_is_initialized(&ch->buf) ) {
     // Destroy the buffer.
@@ -1868,12 +1886,18 @@ qioerr _qio_channel_final_flush_unlocked(qio_channel_t* ch)
 
   ch->hints |= QIO_CHTYPE_CLOSED; // set to invalid type so funcs return EINVAL
 
+  // printf("refcnt & close...\n");
+  // fflush(stdout);
+
   // If this channel is the last owner of the file, close the file
   // now so we can return an error here if there was one.
   // The file will be destroyed in the qio_file_release call below.
   if (DO_GET_REFCNT(ch->file) == 1) {
     close_file_error = qio_file_close(ch->file);
   }
+
+  // printf("release file...\n");
+  // fflush(stdout);
 
   qio_file_release(ch->file);
   ch->file = NULL;
@@ -1888,7 +1912,9 @@ void _qio_channel_destroy(qio_channel_t* ch)
 {
   qioerr err;
 
-  if( DEBUG_QIO ) printf("Destroying channel %p\n", ch);
+  // if( DEBUG_QIO ) printf("Destroying channel %p\n", ch);
+  // printf("Destroying channel %p\n", ch);
+  // fflush(stdout);
 
   err = _qio_channel_final_flush_unlocked(ch);
   if( err ) {
@@ -1901,10 +1927,19 @@ void _qio_channel_destroy(qio_channel_t* ch)
     abort();
   }
 
+  // printf("lock\n");
+  // fflush(stdout);
+
   qio_lock_destroy(&ch->lock);
+
+  // printf("file\n");
+  // fflush(stdout);
 
   qio_file_release(ch->file);
   ch->file = NULL;
+
+  // printf("mark stack\n");
+  // fflush(stdout);
 
   // If mark_stack has been (re)allocated, free it.
   if (ch->mark_stack != ch->mark_space) {
@@ -2135,7 +2170,7 @@ qioerr _buffered_get_strbuf(qio_channel_t* ch, int64_t amt, int writing)
   if ( ch->file->str_buf_len < amt ) {
     char* newbuf = (char*) qio_realloc(ch->file->str_buf, ch->file->str_buf_len + amt);
     if ( !newbuf ) {
-      qio_free(ch->file->str_buf);
+      // qio_free(ch->file->str_buf);
       return QIO_ENOMEM;
     }
     ch->file->str_buf = newbuf;
@@ -3023,16 +3058,18 @@ qioerr _qio_buffered_write(qio_channel_t* ch, const void* ptr, ssize_t len, ssiz
     _qio_buffered_setup_cached(ch);
 
   } else {
-    // otherwise, do a buffered write
-    while ((remaining > 0) && !eof) {
-      if ( method == QIO_METHOD_STRBUF ) {
-        gotlen = remaining;
+    if ( method == QIO_METHOD_STRBUF ) {
+      // err = _qio_channel_require_unlocked(ch, len, 1);
+      // eof = 0;
+      // if( qio_err_to_int(err) == EEOF ) eof = 1;
+      // else if( err ) goto error;
 
-        err = qio_memcpy(&ch->file->str_buf, (char *) ptr + (toWriteTotal-remaining), gotlen);
-        if (err) goto error;
-
-        _add_right_mark_start(ch, remaining);
-      } else {
+      qio_memcpy(&ch->file->str_buf, (char*) ptr, len);
+      _add_right_mark_start(ch, remaining);
+      // ch->file->str_buf = qio_ptr_add(ch->file->str_buf, len);
+    } else { 
+      // otherwise, do a buffered write
+      while ((remaining > 0) && !eof) {
         if ((ch->bufIoMax > 0) && (remaining > ch->bufIoMax)) {
           toWriteBuffer = ch->bufIoMax;
         } else {
@@ -3063,8 +3100,8 @@ qioerr _qio_buffered_write(qio_channel_t* ch, const void* ptr, ssize_t len, ssiz
         // did we get to a different part? If so, call write()
         err = _qio_buffered_behind(ch, false);
         if( err ) goto error;
+        remaining -= gotlen;
       }
-      remaining -= gotlen;
     }
   }
 
@@ -3275,8 +3312,14 @@ qioerr _qio_channel_flush_qio_unlocked(qio_channel_t* ch)
 
   err = 0;
 
+  // printf("flushing bits buffer ... \n");
+  // fflush(stdout);
+
   // if writing, write anything in the bits...
   err = _qio_flush_bits_if_needed_unlocked(ch);
+
+  // printf("flushing qbuffer... \n");
+  // fflush(stdout);
 
   // Handle flushing any buffers.
 
@@ -3291,10 +3334,19 @@ qioerr _qio_channel_flush_qio_unlocked(qio_channel_t* ch)
     if( err ) return err;
   }
 
+  // printf("checking saved errors...\n");
+  // fflush(stdout);
+
   // If there was an error saved earlier, report it now.
   // We don't report EILSEQ, EEOF, EFORMAT, or ESHORT on a flush.
   saved_err = qio_channel_error(ch);
-  errcode = qio_err_to_int(saved_err);
+
+  // printf("yep...\n");
+  // fflush(stdout);
+  // errcode = qio_err_to_int(saved_err);
+  // printf("nope...\n");
+  // fflush(stdout);
+
   if( !err &&
       !(errcode == EILSEQ || errcode == EEOF || errcode == EFORMAT || errcode == ESHORT) ) {
     err = saved_err;
@@ -3306,6 +3358,9 @@ qioerr _qio_channel_flush_unlocked(qio_channel_t* ch)
 {
   qio_method_t method = (qio_method_t) (ch->hints & QIO_METHODMASK);
   qioerr err;
+
+  // printf("qio flushing channel %p...\n", ch);
+  // fflush(stdout);
 
   err = _qio_channel_flush_qio_unlocked(ch);
 

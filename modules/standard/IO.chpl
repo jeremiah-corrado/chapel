@@ -5208,14 +5208,14 @@ proc fileWriter._writeOne(param kind: iokind, const x:?t, loc:locale) throws {
   // TODO: Make _write_one_internal(s) a method instead.
   var err = _write_one_internal(_channel_internal, kind, x, loc);
 
-  if err != 0 {
-    var msg = _constructIoErrorMsg(kind, x);
-    if err == EILSEQ {
-      // TODO: Is this error tested?
-      msg = escapedNonUTF8ErrorMessage() + msg;
-    }
-    try _ch_ioerror(err, msg);
-  }
+  // if err != 0 {
+  //   var msg = _constructIoErrorMsg(kind, x);
+  //   if err == EILSEQ {
+  //     // TODO: Is this error tested?
+  //     msg = escapedNonUTF8ErrorMessage() + msg;
+  //   }
+  //   try _ch_ioerror(err, msg);
+  // }
 }
 private proc _read_io_type_internal(_channel_internal:qio_channel_ptr_t,
                                     param kind:iokind,
