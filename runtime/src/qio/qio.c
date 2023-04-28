@@ -856,6 +856,10 @@ qioerr qio_file_init(qio_file_t** file_out, FILE* fp, fd_t fd, qio_hint_t iohint
   if( style ) qio_style_copy(&file->style, style);
   else qio_style_init_default(&file->style);
 
+  file->strbuf = NULL;
+  file->strbuf_len = 0;
+  file->strbuf_pos = -1;
+
   *file_out = file;
   return 0;
 
@@ -1582,6 +1586,52 @@ qioerr qio_channel_create(qio_channel_t** ch_out, qio_file_t* file, qio_hint_t h
   }
 }
 
+qioerr qio_file_init_strbuf(qio_file_t** file_out, char* buf, int bufLen, int bufSize, const qio_style_t* style) {
+  qio_file_t* file = (qio_file_t*) qio_calloc(sizeof(qio_file_t), 1);
+  if( ! file ) {
+    return QIO_ENOMEM;
+  }
+
+  DO_INIT_REFCNT(file);
+  file->fp = NULL;
+  file->fd = -1;
+  file->buf = NULL;
+  file->closed = false;
+  file->hints = QIO_METHOD_STRBUF;
+  file->file_info = NULL;
+  file->mmap = NULL;
+
+  file->strbuf = buf;
+  file->strbuf_len = bufLen;
+  file->strbuf_pos = bufSize;
+
+  if( style ) qio_style_copy(&file->style, style);
+  else qio_style_init_default(&file->style);
+
+  *file_out = file;
+  return 0;
+}
+
+qioerr qio_file_close_strbuf(qio_file_t* f, int* buflen_out, int* bufsize_out) {
+  *buflen_out = f->strbuf_len;
+  *bufsize_out = f->strbuf_pos;
+  f->closed = true;
+  return 0;
+}
+
+qioerr qio_channel_create_strbuf(qio_channel_t** ch_out, qio_file_t* f, qio_style_t* style) {
+  qio_channel_t* ret;
+
+  ret = (qio_channel_t*) qio_calloc(1, sizeof(qio_channel_t));
+  if( !ret ) return QIO_ENOMEM;
+
+  ret->file = f;
+  ret->hints = QIO_METHOD_STRBUF;
+
+  DO_INIT_REFCNT(ret);
+  *ch_out = ret;
+  return 0;
+}
 
 // This routine always returns a malloc'd string in the path_out pointer.
 // The caller must free the passed-back pointer.
@@ -2287,6 +2337,7 @@ qioerr _buffered_read_atleast(qio_channel_t* ch, int64_t amt)
         break;
       case QIO_METHOD_MMAP:
       case QIO_METHOD_MEMORY:
+      case QIO_METHOD_STRBUF:
         // should've been handled outside this method!
         QIO_GET_CONSTANT_ERROR(err, EINVAL, "internal error");
         break;
@@ -2713,6 +2764,8 @@ qioerr _qio_buffered_behind(qio_channel_t* ch, int flushall)
           num_written = qbuffer_iter_num_bytes(write_start, write_end);
           break;
         // no default to get warnings when new methods are added
+        case QIO_METHOD_STRBUF:
+          break;
       }
       qbuffer_iter_advance(&ch->buf, &write_start, num_written);
 
@@ -2933,6 +2986,8 @@ qioerr _qio_buffered_write(qio_channel_t* ch, const void* ptr, ssize_t len, ssiz
           break;
           case QIO_METHOD_MEMORY:
           break;
+          case QIO_METHOD_STRBUF:
+          break;
       }
       if( err ) {
         *amt_written = num_written + toWriteTotal - remaining;
@@ -3073,6 +3128,8 @@ qioerr _qio_unbuffered_write(qio_channel_t* ch, const void* ptr, ssize_t len_in,
           */
           QIO_GET_CONSTANT_ERROR(err, EINVAL, "not supported for memory file");
           break;
+          case QIO_METHOD_STRBUF:
+          break;
         // no default to get warnings when new methods are added
       }
       if( err ) {
@@ -3164,6 +3221,8 @@ qioerr _qio_unbuffered_read(qio_channel_t* ch, void* ptr, ssize_t len_in, ssize_
           // unlock the file lock
           */
           QIO_GET_CONSTANT_ERROR(err, EINVAL, "not supported for memory file");
+          break;
+          case QIO_METHOD_STRBUF:
           break;
         // no default to get warnings when new methods are added
       }

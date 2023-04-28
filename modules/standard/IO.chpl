@@ -877,6 +877,8 @@ extern const QIO_METHOD_FREADFWRITE:c_int;
 pragma "no doc"
 extern const QIO_METHOD_MMAP:c_int;
 pragma "no doc"
+extern const QIO_METHOD_STRBUF:c_int;
+pragma "no doc"
 extern const QIO_METHODMASK:c_int;
 pragma "no doc"
 extern const QIO_HINT_RANDOM:c_int;
@@ -1226,7 +1228,11 @@ private extern proc qio_file_get_plugin(f:qio_file_ptr_t):c_void_ptr;
 private extern proc qio_channel_get_plugin(ch:qio_channel_ptr_t):c_void_ptr;
 private extern proc qio_file_length(f:qio_file_ptr_t, ref len:int(64)):errorCode;
 
+private extern proc qio_file_init_strbuf(ref file_out:qio_file_ptr_t, buf: c_ptr(c_uchar), bufLen: c_long, bufSize: c_long, const ref style:iostyleInternal):errorCode;
+private extern proc qio_file_close_strbuf(ch:qio_file_ptr_t, ref size_out:c_long, ref len_out:c_long):errorCode;
+
 private extern proc qio_channel_create(ref ch:qio_channel_ptr_t, file:qio_file_ptr_t, hints:c_int, readable:c_int, writeable:c_int, start:int(64), end:int(64), const ref style:iostyleInternal, bufIoMax:int(64)):errorCode;
+private extern proc qio_channel_create_strbuf(ref ch:qio_channel_ptr_t, file:qio_file_ptr_t, const ref style:iostyleInternal):errorCode;
 
 private extern proc qio_channel_path_offset(threadsafe:c_int, ch:qio_channel_ptr_t, ref path:c_string, ref offset:int(64)):errorCode;
 
@@ -1619,6 +1625,45 @@ operator ioHintSet.!=(lhs: ioHintSet, rhs: ioHintSet) {
   return !(lhs == rhs);
 }
 
+
+record stringFile {
+  var _home: locale = here;
+  var _file_internal:qio_file_ptr_t = QIO_FILE_PTR_NULL;
+  var s: string;
+}
+
+proc stringFile.init(in s: string) {
+  this._home = s.locale;
+  this._file_internal = QIO_FILE_PTR_NULL;
+  on this._home {
+    var err = qio_file_init_strbuf(this._file_internal, s.buff, s.buffLen, s.buffSize, defaultIOStyleInternal());
+  }
+  this.s = s;
+}
+
+proc stringFile.writer(
+    param kind=iokind.dynamic,
+    param locking=false
+): fileWriter(kind, locking) throws {
+  var err: errorCode,
+      fw = new fileWriter(this, kind, locking, defaultFmtVal(true), err);
+
+  try ioerror(err, "in stringFile.writer");
+
+  return fw;
+}
+
+proc stringFile.close(): string {
+  import BytesStringCommon.countNumCodepoints;
+  on this._home {
+    var strbufLen, strbufSize: int = 0;
+    var err = qio_file_close_strbuf(this._file_internal, strbufLen, strbufSize);
+    this.s.buffLen = strbufLen;
+    this.s.buffSize = strbufSize;
+    this.s.cachedNumCodepoints = countNumCodepoints(s);
+  }
+  return this.s;
+}
 
 
 /*
@@ -2963,6 +3008,19 @@ proc fileWriter.init(param kind:iokind, param locking:bool, in formatter:?,
                                start, end, local_style, 64*1024);
     // On return this._channel_internal.ref_cnt == 1.
     // Failure to check the error return code may result in a double-deletion error.
+  }
+}
+
+pragma "no doc"
+proc fileWriter.init(f: stringFile, param kind:iokind, param locking:bool, in formatter:?, out error:errorCode) {
+  this.init(kind, locking, formatter);
+  on f._home {
+    this._home = f._home;
+    error = qio_channel_create_strbuf(
+      this._channel_internal,
+      f._file_internal,
+      defaultIOStyleInternal()
+    );
   }
 }
 

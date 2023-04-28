@@ -237,6 +237,7 @@ typedef enum {
   QIO_METHOD_FREADFWRITE = 3*QIO_HINT_AFTERCHTYPE,
   QIO_METHOD_MMAP = 4*QIO_HINT_AFTERCHTYPE,
   QIO_METHOD_MEMORY = 5*QIO_HINT_AFTERCHTYPE,
+  QIO_METHOD_STRBUF = 6*QIO_HINT_AFTERCHTYPE,
   //QIO_METHOD_LIBEVENT,
 } qio_method_t;
 #define QIO_METHODMASK 0x00f0
@@ -338,6 +339,9 @@ char* qio_hints_to_string(qio_hint_t hint)
       case QIO_METHOD_MEMORY:
         strcat(buf, " memory"); ok = 1;
         break;
+      case QIO_METHOD_STRBUF:
+        strcat(buf, " strbuf"); ok = 1;
+        break;
       // no default to get warned if any are added.
     }
   }
@@ -426,6 +430,11 @@ typedef struct qio_file_s {
   int64_t max_initial_position;
 
   qio_style_t style;
+
+  char* strbuf;
+  size_t strbuf_len; // length of the string's buffer
+  size_t strbuf_pos; // length of the string
+
 } qio_file_t;
 
 typedef qio_file_t* qio_file_ptr_t;
@@ -442,6 +451,9 @@ qioerr qio_file_open(qio_file_t** file_out, const char* path, int flags, mode_t 
 qioerr qio_file_open_access(qio_file_t** file_out, const char* pathname, const char* access, qio_hint_t iohints, const qio_style_t* style);
 qioerr qio_file_open_mem_ext(qio_file_t** file_out, qbuffer_t* buf, qio_fdflag_t fdflags, qio_hint_t iohints, const qio_style_t* style);
 qioerr qio_file_open_mem(qio_file_t** file_out, qbuffer_t* buf, const qio_style_t* style);
+
+qioerr qio_file_init_strbuf(qio_file_t** file_out, char* buf, int bufLen, int bufSize, const qio_style_t* style);
+qioerr qio_file_close_strbuf(qio_file_t* f, int* buflen_out, int* bufsize_out);
 
 qioerr qio_file_open_tmp(qio_file_t** file_out, qio_hint_t iohints, const qio_style_t* style);
 
@@ -722,6 +734,7 @@ typedef struct qio_channel_s {
 
   qio_style_t style;
   int64_t bufIoMax; // maximum single I/O to/from buffer
+
 } qio_channel_t;
 
 
@@ -779,6 +792,7 @@ qioerr _qio_channel_init_file(qio_channel_t* ch, qio_file_t* file, qio_hint_t hi
 
 // maybe want to use INT64_MAX for end if it's not to be restricted.
 qioerr qio_channel_create(qio_channel_t** ch_out, qio_file_t* file, qio_hint_t hints, int readable, int writeable, int64_t start, int64_t end, qio_style_t* style, int64_t bufIoMax);
+qioerr qio_channel_create_strbuf(qio_channel_t** ch_out, qio_file_t* file, qio_style_t* style);
 
 qioerr qio_relative_path(const char** path_out, const char* cwd, const char* path);
 qioerr qio_shortest_path(qio_file_t* file, const char** path_out, const char* path_in);
@@ -1066,16 +1080,29 @@ qioerr qio_channel_write_amt(const int threadsafe, qio_channel_t* restrict ch, c
     }
   }
 
-  // Is there room in our fast path buffer?
-  if( qio_space_in_ptr_diff(len, ch->cached_end, ch->cached_cur) ) {
-    qio_memcpy( ch->cached_cur, ptr, len );
-    ch->cached_cur = qio_ptr_add(ch->cached_cur, len);
-    err = _qio_channel_post_cached_write(ch);
+  if ( (ch->hints & QIO_METHODMASK) == QIO_METHOD_STRBUF ) {
+    if ( len > ch->file->strbuf_len - ch->file->strbuf_pos ) {
+      char* new_strbuf = (char*) qio_realloc(ch->file->strbuf, ch->file->strbuf_len + len);
+      if( ! new_strbuf ) {
+        return QIO_ENOMEM;
+      }
+      ch->file->strbuf = new_strbuf;
+      ch->file->strbuf_len += len;
+    }
+    qio_memcpy( ch->file->strbuf + ch->file->strbuf_pos, ptr, len );
+    ch->file->strbuf_pos += len;
   } else {
-    ssize_t amt_written = 0;
-    err = _qio_slow_write(ch, ptr, len, &amt_written);
-    if( err == 0 && amt_written != len ) err = QIO_ESHORT;
-    _qio_channel_set_error_unlocked(ch, err);
+    // Is there room in our fast path buffer?
+    if( qio_space_in_ptr_diff(len, ch->cached_end, ch->cached_cur) ) {
+      qio_memcpy( ch->cached_cur, ptr, len );
+      ch->cached_cur = qio_ptr_add(ch->cached_cur, len);
+      err = _qio_channel_post_cached_write(ch);
+    } else {
+      ssize_t amt_written = 0;
+      err = _qio_slow_write(ch, ptr, len, &amt_written);
+      if( err == 0 && amt_written != len ) err = QIO_ESHORT;
+      _qio_channel_set_error_unlocked(ch, err);
+    }
   }
 
   if( threadsafe ) {
@@ -1327,8 +1354,10 @@ qioerr qio_channel_close(const int threadsafe, qio_channel_t* ch)
     if( err ) return err;
   }
 
-  err = _qio_channel_final_flush_unlocked(ch);
-  _qio_channel_set_error_unlocked(ch, err);
+  if ( (ch->hints & QIO_METHODMASK) != QIO_METHOD_STRBUF ) {
+    err = _qio_channel_final_flush_unlocked(ch);
+    _qio_channel_set_error_unlocked(ch, err);
+  }
 
   if( threadsafe ) {
     qio_unlock(&ch->lock);
