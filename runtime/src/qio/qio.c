@@ -857,7 +857,7 @@ qioerr qio_file_init(qio_file_t** file_out, FILE* fp, fd_t fd, qio_hint_t iohint
   else qio_style_init_default(&file->style);
 
   file->strbuf = NULL;
-  file->strbuf_len = 0;
+  file->strbuf_size = 0;
   file->strbuf_pos = -1;
 
   *file_out = file;
@@ -1586,7 +1586,7 @@ qioerr qio_channel_create(qio_channel_t** ch_out, qio_file_t* file, qio_hint_t h
   }
 }
 
-qioerr qio_file_init_strbuf(qio_file_t** file_out, char* buf, int bufLen, int bufSize, const qio_style_t* style) {
+qioerr qio_file_init_strbuf(qio_file_t** file_out, char* buf, int bufSize, int bufPos, const qio_style_t* style) {
   qio_file_t* file = (qio_file_t*) qio_calloc(sizeof(qio_file_t), 1);
   if( ! file ) {
     return QIO_ENOMEM;
@@ -1602,8 +1602,8 @@ qioerr qio_file_init_strbuf(qio_file_t** file_out, char* buf, int bufLen, int bu
   file->mmap = NULL;
 
   file->strbuf = buf;
-  file->strbuf_len = bufLen;
-  file->strbuf_pos = bufSize;
+  file->strbuf_size = bufSize;
+  file->strbuf_pos = bufPos;
 
   if( style ) qio_style_copy(&file->style, style);
   else qio_style_init_default(&file->style);
@@ -1612,9 +1612,9 @@ qioerr qio_file_init_strbuf(qio_file_t** file_out, char* buf, int bufLen, int bu
   return 0;
 }
 
-qioerr qio_file_close_strbuf(qio_file_t* f, int* buflen_out, int* bufsize_out) {
-  *buflen_out = f->strbuf_len;
-  *bufsize_out = f->strbuf_pos;
+qioerr qio_file_close_strbuf(qio_file_t* f, int* bufsize_out, int* bufpos_out) {
+  *bufsize_out = f->strbuf_size;
+  *bufpos_out = f->strbuf_pos;
   f->closed = true;
   return 0;
 }
@@ -1627,6 +1627,11 @@ qioerr qio_channel_create_strbuf(qio_channel_t** ch_out, qio_file_t* f, qio_styl
 
   ret->file = f;
   ret->hints = QIO_METHOD_STRBUF;
+
+  ret->mark_cur = 0;
+  ret->mark_stack_size = MARK_INITIAL_STACK_SZ;
+  ret->mark_stack = ret->mark_space;
+  for(size_t i = 0; i < MARK_INITIAL_STACK_SZ; i++ ) ret->mark_space[i] = -1;
 
   DO_INIT_REFCNT(ret);
   *ch_out = ret;
@@ -1899,17 +1904,19 @@ void _qio_channel_destroy(qio_channel_t* ch)
 
   if( DEBUG_QIO ) printf("Destroying channel %p\n", ch);
 
-  err = _qio_channel_final_flush_unlocked(ch);
-  if( err ) {
-    const char* msg = qio_err_msg(err);
-    if (msg == NULL)
-      msg = "system error";
-    fprintf(stderr, "qio_channel_final_flush returned fatal error %i %s\n",
-        qio_err_to_int(err), msg);
-    assert( !err );
-    abort();
+  if ( (ch->hints & QIO_METHODMASK) != QIO_METHOD_STRBUF ) {
+    err = _qio_channel_final_flush_unlocked(ch);
+    if( err ) {
+      const char* msg = qio_err_msg(err);
+      if (msg == NULL)
+        msg = "system error";
+      fprintf(stderr, "qio_channel_final_flush returned fatal error %i %s\n",
+          qio_err_to_int(err), msg);
+      assert( !err );
+      abort();
+    }
   }
-
+  
   qio_lock_destroy(&ch->lock);
 
   qio_file_release(ch->file);

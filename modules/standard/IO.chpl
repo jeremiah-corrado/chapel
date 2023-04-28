@@ -1228,7 +1228,7 @@ private extern proc qio_file_get_plugin(f:qio_file_ptr_t):c_void_ptr;
 private extern proc qio_channel_get_plugin(ch:qio_channel_ptr_t):c_void_ptr;
 private extern proc qio_file_length(f:qio_file_ptr_t, ref len:int(64)):errorCode;
 
-private extern proc qio_file_init_strbuf(ref file_out:qio_file_ptr_t, buf: c_ptr(c_uchar), bufLen: c_long, bufSize: c_long, const ref style:iostyleInternal):errorCode;
+private extern proc qio_file_init_strbuf(ref file_out:qio_file_ptr_t, buf: c_ptr(c_uchar), bufSize: c_long, bufPos: c_long, const ref style:iostyleInternal):errorCode;
 private extern proc qio_file_close_strbuf(ch:qio_file_ptr_t, ref size_out:c_long, ref len_out:c_long):errorCode;
 
 private extern proc qio_channel_create(ref ch:qio_channel_ptr_t, file:qio_file_ptr_t, hints:c_int, readable:c_int, writeable:c_int, start:int(64), end:int(64), const ref style:iostyleInternal, bufIoMax:int(64)):errorCode;
@@ -1629,16 +1629,26 @@ operator ioHintSet.!=(lhs: ioHintSet, rhs: ioHintSet) {
 record stringFile {
   var _home: locale = here;
   var _file_internal:qio_file_ptr_t = QIO_FILE_PTR_NULL;
-  var s: string;
+  var sbuff: c_ptr(uint(8)) = nil;
 }
 
 proc stringFile.init(in s: string) {
   this._home = s.locale;
   this._file_internal = QIO_FILE_PTR_NULL;
+  this.sbuff = nil;
+
   on this._home {
-    var err = qio_file_init_strbuf(this._file_internal, s.buff, s.buffLen, s.buffSize, defaultIOStyleInternal());
+    this.sbuff = c_malloc(uint(8), s.buffSize);
+    c_memcpy(this.sbuff, s.buff, s.buffLen);
+
+    var err = qio_file_init_strbuf(
+      this._file_internal, 
+      sbuff,
+      s.buffSize, // string buffer allocated size
+      s.buffLen, // string size
+      defaultIOStyleInternal()
+    );
   }
-  this.s = s;
 }
 
 proc stringFile.writer(
@@ -1653,16 +1663,16 @@ proc stringFile.writer(
   return fw;
 }
 
-proc stringFile.close(): string {
-  import BytesStringCommon.countNumCodepoints;
+proc stringFile.close(): string throws {
+  // import BytesStringCommon.countNumCodepoints;
+  var s_new: string = "";
   on this._home {
-    var strbufLen, strbufSize: int = 0;
-    var err = qio_file_close_strbuf(this._file_internal, strbufLen, strbufSize);
-    this.s.buffLen = strbufLen;
-    this.s.buffSize = strbufSize;
-    this.s.cachedNumCodepoints = countNumCodepoints(s);
+    var strBufLen, strLen: int = 0;
+    var err = qio_file_close_strbuf(this._file_internal, strBufLen, strLen);
+
+    s_new = createStringWithOwnedBuffer(this.sbuff, strLen, strBufLen);
   }
-  return this.s;
+  return s_new;
 }
 
 

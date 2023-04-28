@@ -432,7 +432,7 @@ typedef struct qio_file_s {
   qio_style_t style;
 
   char* strbuf;
-  size_t strbuf_len; // length of the string's buffer
+  size_t strbuf_size; // length of the string's buffer
   size_t strbuf_pos; // length of the string
 
 } qio_file_t;
@@ -452,8 +452,8 @@ qioerr qio_file_open_access(qio_file_t** file_out, const char* pathname, const c
 qioerr qio_file_open_mem_ext(qio_file_t** file_out, qbuffer_t* buf, qio_fdflag_t fdflags, qio_hint_t iohints, const qio_style_t* style);
 qioerr qio_file_open_mem(qio_file_t** file_out, qbuffer_t* buf, const qio_style_t* style);
 
-qioerr qio_file_init_strbuf(qio_file_t** file_out, char* buf, int bufLen, int bufSize, const qio_style_t* style);
-qioerr qio_file_close_strbuf(qio_file_t* f, int* buflen_out, int* bufsize_out);
+qioerr qio_file_init_strbuf(qio_file_t** file_out, char* buf, int bufSize, int bufPos, const qio_style_t* style);
+qioerr qio_file_close_strbuf(qio_file_t* f, int* bufsize_out, int* bufpos_out);
 
 qioerr qio_file_open_tmp(qio_file_t** file_out, qio_hint_t iohints, const qio_style_t* style);
 
@@ -1081,16 +1081,31 @@ qioerr qio_channel_write_amt(const int threadsafe, qio_channel_t* restrict ch, c
   }
 
   if ( (ch->hints & QIO_METHODMASK) == QIO_METHOD_STRBUF ) {
-    if ( len > ch->file->strbuf_len - ch->file->strbuf_pos ) {
-      char* new_strbuf = (char*) qio_realloc(ch->file->strbuf, ch->file->strbuf_len + len);
+    printf("\nstrbuf write %ld\n", len);
+    printf("buf address: %p\n", ch->file->strbuf);
+    printf("buf size: %ld\n", ch->file->strbuf_size);
+    printf("buf pos: %ld\n", ch->file->strbuf_pos);
+    fflush(stdout);
+
+    if ( len >= ch->file->strbuf_size - ch->file->strbuf_pos ) {
+      ssize_t new_size = ch->file->strbuf_size + len + 1;
+      char* new_strbuf = (char*) qio_realloc(ch->file->strbuf, new_size*sizeof(char));
       if( ! new_strbuf ) {
         return QIO_ENOMEM;
       }
       ch->file->strbuf = new_strbuf;
-      ch->file->strbuf_len += len;
+      ch->file->strbuf_size = new_size;
     }
     qio_memcpy( ch->file->strbuf + ch->file->strbuf_pos, ptr, len );
     ch->file->strbuf_pos += len;
+
+    printf("after...\n");
+    printf("buf address: %p\n", ch->file->strbuf);
+    printf("buf size: %ld\n", ch->file->strbuf_size);
+    printf("buf pos: %ld\n", ch->file->strbuf_pos);
+    printf("\n");
+    fflush(stdout);
+
   } else {
     // Is there room in our fast path buffer?
     if( qio_space_in_ptr_diff(len, ch->cached_end, ch->cached_cur) ) {

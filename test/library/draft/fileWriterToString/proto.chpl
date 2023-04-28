@@ -1,17 +1,18 @@
 use IO;
 
-var s = "";
+var s = "abc";
 
 var sf = new stringFile(s),
-    stringWriter = sf.writer();
+    sw = sf.writer();
 
 try {
-    stringWriter.write("hello world!");
+    sw.writeln(21);
+    sw.writeln("hello world!");
 } catch e {
     writeln(e);
 }
 
-stringWriter.close();
+sw.close();
 var s2 = sf.close();
 
-writeln(s2);
+writeln("s2: ", s2);
