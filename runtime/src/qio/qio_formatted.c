@@ -1257,6 +1257,9 @@ qioerr qio_channel_write_string(const int threadsafe, const int byteorder, const
       marked = true;
   }
 
+  printf("writing string length bytes...\n");
+  fflush(stdout);
+
   // write a string length if necessary.
   switch (str_style) {
     case QIO_BINARY_STRING_STYLE_LEN1B_DATA:
@@ -1311,7 +1314,13 @@ qioerr qio_channel_write_string(const int threadsafe, const int byteorder, const
       }
   }
 
+  if ( err ) printf("got error writing string length bytes\n");
+  fflush(stdout);
+
   if( err ) goto rewind;
+
+  printf("writing string...\n");
+  fflush(stdout);
 
   // write the string itself
   if (len > 0) {
