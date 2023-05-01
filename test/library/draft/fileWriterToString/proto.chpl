@@ -7,7 +7,9 @@ var sf = new stringFile(s),
 
 try {
     sw.writeln(21);
+    // sw.writeString("hello world!");
     sw.writeln("hello world!");
+
 } catch e {
     writeln(e);
 }
