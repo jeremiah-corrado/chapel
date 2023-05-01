@@ -1314,7 +1314,7 @@ qioerr qio_channel_write_string(const int threadsafe, const int byteorder, const
       }
   }
 
-  if ( err ) printf("got error writing string length bytes\n");
+  printf("string length bytes err: %d\n", err);
   fflush(stdout);
 
   if( err ) goto rewind;

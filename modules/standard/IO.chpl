@@ -1670,7 +1670,7 @@ proc stringFile.close(): string throws {
     var strBufLen, strLen: int = 0;
     var err = qio_file_close_strbuf(this._file_internal, strBufLen, strLen);
 
-    s_new = createStringWithOwnedBuffer(this.sbuff, strLen, strBufLen);
+    s_new = createStringWithNewBuffer(this.sbuff, strLen, policy=decodePolicy.drop);
   }
   return s_new;
 }

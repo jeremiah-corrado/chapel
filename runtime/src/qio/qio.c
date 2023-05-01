@@ -1605,8 +1605,9 @@ qioerr qio_file_init_strbuf(qio_file_t** file_out, char* buf, int bufSize, int b
   file->strbuf_size = bufSize;
   file->strbuf_pos = bufPos;
 
-  if( style ) qio_style_copy(&file->style, style);
-  else qio_style_init_default(&file->style);
+  // if( style ) qio_style_copy(&file->style, style);
+  // else qio_style_init_default(&file->style);
+  qio_style_init_default(&file->style);
 
   *file_out = file;
   return 0;
@@ -1632,6 +1633,8 @@ qioerr qio_channel_create_strbuf(qio_channel_t** ch_out, qio_file_t* f, qio_styl
   ret->mark_stack_size = MARK_INITIAL_STACK_SZ;
   ret->mark_stack = ret->mark_space;
   for(size_t i = 0; i < MARK_INITIAL_STACK_SZ; i++ ) ret->mark_space[i] = -1;
+
+  qio_style_init_default(&ret->style);
 
   DO_INIT_REFCNT(ret);
   *ch_out = ret;
