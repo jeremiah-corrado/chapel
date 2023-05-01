@@ -1081,11 +1081,11 @@ qioerr qio_channel_write_amt(const int threadsafe, qio_channel_t* restrict ch, c
   }
 
   if ( (ch->hints & QIO_METHODMASK) == QIO_METHOD_STRBUF ) {
-    printf("\nstrbuf write %ld\n", len);
-    printf("buf address: %p\n", ch->file->strbuf);
-    printf("buf size: %ld\n", ch->file->strbuf_size);
-    printf("buf pos: %ld\n", ch->file->strbuf_pos);
-    fflush(stdout);
+    // printf("\nstrbuf write %ld\n", len);
+    // printf("buf address: %p\n", ch->file->strbuf);
+    // printf("buf size: %ld\n", ch->file->strbuf_size);
+    // printf("buf pos: %ld\n", ch->file->strbuf_pos);
+    // fflush(stdout);
 
     if ( len >= ch->file->strbuf_size - ch->file->strbuf_pos ) {
       ssize_t new_size = ch->file->strbuf_size + len + 1;
@@ -1099,12 +1099,12 @@ qioerr qio_channel_write_amt(const int threadsafe, qio_channel_t* restrict ch, c
     qio_memcpy( ch->file->strbuf + ch->file->strbuf_pos, ptr, len );
     ch->file->strbuf_pos += len;
 
-    printf("after...\n");
-    printf("buf address: %p\n", ch->file->strbuf);
-    printf("buf size: %ld\n", ch->file->strbuf_size);
-    printf("buf pos: %ld\n", ch->file->strbuf_pos);
-    printf("\n");
-    fflush(stdout);
+    // printf("after...\n");
+    // printf("buf address: %p\n", ch->file->strbuf);
+    // printf("buf size: %ld\n", ch->file->strbuf_size);
+    // printf("buf pos: %ld\n", ch->file->strbuf_pos);
+    // printf("\n");
+    // fflush(stdout);
 
   } else {
     // Is there room in our fast path buffer?
