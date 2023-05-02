@@ -205,6 +205,11 @@ class YamlScalar: YamlValue {
   override proc _asKey(): string {
     return value;
   }
+
+  @chpldoc.nodoc
+  proc getCValue(): (c_string, int) {
+    return (this.value.c_str(), this.value.numBytes);
+  }
 }
 
 class YamlSequence: YamlValue {
@@ -256,6 +261,11 @@ class YamlSequence: YamlValue {
     }
     s = s + "]";
     return s;
+  }
+
+  @chpldoc.nodoc
+  iter these(): borrowed YamlValue {
+    for s in sequence do yield s;
   }
 }
 
@@ -312,6 +322,14 @@ class YamlMapping: YamlValue {
     s += "}";
     return s;
   }
+
+  @chpldoc.nodoc
+  iter these(): (owned YamlScalar, borrowed YamlValue) {
+    var keys = mapping.keys();
+    for k in keys {
+      yield (new YamlScalar(k), mapping[k]);
+    }
+  }
 }
 
 class YamlAlias: YamlValue {
@@ -330,6 +348,11 @@ class YamlAlias: YamlValue {
   @chpldoc.nodoc
   override proc _asKey(): string {
     return "*" + alias;
+  }
+
+  @chpldoc.nodoc
+  proc getCValue(): c_string {
+    return this.alias.c_str();
   }
 }
 
