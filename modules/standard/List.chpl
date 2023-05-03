@@ -969,19 +969,19 @@ module List {
     proc const ref insertCpy(idx: int, pragma "no auto destroy" in x: eltType): (bool, list(eltType))
       lifetime this < x {
       var inBounds = false,
-          listCpy : list(eltType);
+          lstCpy : list(eltType);
 
       _enter();
 
       if _withinBounds(idx) {
         inBounds = true;
-        listCpy = new list(this);
-        listCpy.insert(idx, x);
+        lstCpy = new list(this);
+        lstCpy.insert(idx, x);
       }
       _leave();
       if !inBounds then _destroy(x);
 
-      return (inBounds, );
+      return (inBounds, lstCpy);
     }
 
     pragma "no doc"
@@ -1265,7 +1265,7 @@ module List {
       return result;
     }
 
-    proc const ref pop(idx: int): (eltType, list(eltType)) {
+    proc const ref popCpy(idx: int): (eltType, list(eltType)) {
       var lstCpy: list(eltType),
           result: eltType;
       _enter();

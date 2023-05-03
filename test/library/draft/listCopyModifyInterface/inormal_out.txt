@@ -1,0 +1,23 @@
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x600001308180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600002808040
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x600001308280
+0: $CHPL_HOME/modules/internal/DefaultRectangular.chpl:100: allocate 72B of DefaultRectangularDom(1,int(64),false) at 0x600001e08050
+0: $CHPL_HOME/modules/internal/DefaultRectangular.chpl:679: allocate 128B of DefaultRectangularArr(1,int(64),false,int(64),int(64)) at 0x600001308400
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 8B of array elements at 0x600003f14000
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x600001308380
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600002808100
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 128B of array elements at 0x600001308280
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x600001308280
+0: $CHPL_HOME/modules/internal/DefaultRectangular.chpl:1136: free 8B of array elements at 0x600003f14000
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1943: free 128B of DefaultRectangularArr(1,int(64),false,int(64),int(64)) at 0x600001308400
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1943: free 72B of DefaultRectangularDom(1,int(64),false) at 0x600001e08050
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600002808040
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x600001308180
+unsorted: [3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5]
+sortedViaCopy: [1, 1, 2, 3, 3, 4, 5, 5, 5, 6, 9]
+sortedViaInsert: [1, 1, 2, 3, 3, 4, 5, 5, 5, 6, 9]
+
+memStats: Allocated Now:                  0
+memStats: Allocation High Water Mark: 67416
+memStats: Sum of Allocations:         78760
+memStats: Sum of Frees:               78760
