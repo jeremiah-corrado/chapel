@@ -114,7 +114,7 @@ iter parseUntilEvent(e_stop: c_int, ref parser: yaml_parser_t, reader: fileReade
         for e in parseUntilEvent(YAML_MAPPING_END_EVENT, parser, reader) {
           // TODO: is there a better way to do this without using unmanaged?
           // should this pattern be allowed for cpy:owned?
-          var cpy: unmanaged YamlValue = owned.release(e);
+          var cpy: unmanaged = owned.release(e);
           if key {
             nextKey = owned.adopt(cpy);
             key = false;

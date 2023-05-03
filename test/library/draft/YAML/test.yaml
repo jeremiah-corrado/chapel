@@ -15,7 +15,7 @@ nested_map: &with_an_alias_tag
     quoted_string: "abcdef"
     ref_to_alias: *with_an_alias_tag
 --- # document 2
-other_list: [1.1, 2.2, 3.3, 4,4]
+other_list: [1.1, 2.2, 3.3, 4.4]
 other_multi_line: >
   the newlines
   in this string

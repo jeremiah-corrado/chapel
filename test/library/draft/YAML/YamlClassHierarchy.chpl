@@ -1,4 +1,4 @@
-use List, Map;
+use List, Map, CTypes;
 
 enum ScalarType {
   YamlFloat,
@@ -8,6 +8,15 @@ enum ScalarType {
   YamlBinary,
   Implicit,
   UserDefined,
+}
+
+enum YamlValueType {
+  Null,
+  Scalar,
+  Sequence,
+  Mapping,
+  Alias,
+  Unknown,
 }
 
 class YamlValue {
@@ -63,6 +72,10 @@ class YamlValue {
     throw new YamlTypeError("cannot convert to list");
   }
 
+  proc valueType(): YamlValueType {
+    return YamlValueType.Unknown;
+  }
+
   @chpldoc.nodoc
   proc writeThis(fw) throws {
     if tag != "" then
@@ -79,6 +92,10 @@ class YamlNull: YamlValue {
   @chpldoc.nodoc
   override proc _asKey(): string {
     return "null";
+  }
+
+  override proc valueType(): YamlValueType {
+    return YamlValueType.Null;
   }
 }
 
@@ -186,6 +203,10 @@ class YamlScalar: YamlValue {
     throw new YamlTypeError("cannot convert to bool");
   }
 
+  override proc valueType(): YamlValueType {
+    return YamlValueType.Scalar;
+  }
+
   @chpldoc.nodoc
   override proc writeThis(fw) throws {
     super.writeThis(fw);
@@ -207,8 +228,8 @@ class YamlScalar: YamlValue {
   }
 
   @chpldoc.nodoc
-  proc getCValue(): (c_string, int) {
-    return (this.value.c_str(), this.value.numBytes);
+  proc getCValue(): (c_ptr(c_uchar), int(32)) {
+    return (this.value.buff, this.value.numBytes: int(32));
   }
 }
 
@@ -263,6 +284,10 @@ class YamlSequence: YamlValue {
     return s;
   }
 
+  override proc valueType(): YamlValueType {
+    return YamlValueType.Sequence;
+  }
+
   @chpldoc.nodoc
   iter these(): borrowed YamlValue {
     for s in sequence do yield s;
@@ -297,6 +322,10 @@ class YamlMapping: YamlValue {
 
   proc init() {
     this.mapping = new map(string, owned YamlValue);
+  }
+
+  override proc valueType(): YamlValueType {
+    return YamlValueType.Mapping;
   }
 
   @chpldoc.nodoc
@@ -339,6 +368,10 @@ class YamlAlias: YamlValue {
     this.alias = alias[1..];
   }
 
+  override proc valueType(): YamlValueType {
+    return YamlValueType.Alias;
+  }
+
   @chpldoc.nodoc
   override proc writeThis(fw) throws {
     super.writeThis(fw);
@@ -351,8 +384,8 @@ class YamlAlias: YamlValue {
   }
 
   @chpldoc.nodoc
-  proc getCValue(): c_string {
-    return this.alias.c_str();
+  proc getCValue(): c_ptr(c_uchar) {
+    return this.alias.buff;
   }
 }
 
