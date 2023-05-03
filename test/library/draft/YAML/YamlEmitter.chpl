@@ -88,6 +88,8 @@ private extern proc yaml_scalar_event_initialize(
                     ): c_int;
 private extern proc yaml_alias_event_initialize(event: c_ptr(yaml_event_t), anchor: c_ptrConst(c_uchar)): c_int;
 private extern proc yaml_event_delete(event: c_ptr(yaml_event_t));
+private extern proc yaml_document_end_event_initialize(event: c_ptr(yaml_event_t)): c_int;
+private extern proc yaml_stream_end_event_initialize(event: c_ptr(yaml_event_t)): c_int;
 
 private extern proc fopen(filename: c_string, mode: c_string): c_FILE;
 private extern proc fclose(file: c_FILE): c_int;
@@ -146,7 +148,15 @@ proc writeYamlFile(path: string, val: borrowed YamlValue) throws {
   fclose(f);
 }
 
-proc emitYamlValue(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: borrowed YamlScalar) throws {
+proc emitYamlValue(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: borrowed YamlValue) throws {
+  if isSubtype(v.type, YamlScalar) then emitYamlScalar(emitter, event, v: borrowed YamlScalar);
+  else if isSubtype(v.type, YamlSequence) then emitYamlSequence(emitter, event, v: borrowed YamlSequence);
+  else if isSubtype(v.type, YamlMapping) then emitYamlMapping(emitter, event, v: borrowed YamlMapping);
+  else if isSubtype(v.type, YamlAlias) then emitYamlAlias(emitter, event, v: borrowed YamlAlias);
+  else throw new Error("unknown yaml value type");
+}
+
+proc emitYamlScalar(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: borrowed YamlScalar) throws {
   const (c_val, len) = v.getCValue();
 
   if !yaml_scalar_event_initialize(
@@ -165,7 +175,7 @@ proc emitYamlValue(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: borr
     then throw new Error("failed to emit scalar event");
 }
 
-proc emitYamlValue(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: borrowed YamlMapping) throws {
+proc emitYamlMapping(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: borrowed YamlMapping) throws {
   if !yaml_mapping_start_event_initialize(
         c_ptrTo(event),
         nil,
@@ -190,7 +200,7 @@ proc emitYamlValue(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: borr
     then throw new Error("failed to emit mapping end event");
 }
 
-proc emitYamlValue(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: borrowed YamlSequence) throws {
+proc emitYamlSequence(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: borrowed YamlSequence) throws {
   if !yaml_sequence_start_event_initialize(
         c_ptrTo(event),
         nil,
@@ -214,7 +224,7 @@ proc emitYamlValue(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: borr
     then throw new Error("failed to emit sequence end event");
 }
 
-proc emitYamlValue(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: borrowed YamlAlias) throws {
+proc emitYamlAlias(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: borrowed YamlAlias) throws {
   if !yaml_alias_event_initialize(c_ptrTo(event), v.getCValue())
     then throw new Error("failed to initialize alias event");
 

@@ -42,4 +42,4 @@ writeln(doc2["other_multi_line"].asString());
 // read a mapping as a chapel map
 writeln(doc2["booleans_in_yaml"].asMapOf(bool));
 
-writeYamlFile("test_out.yaml", x);
+writeYamlFile("test_out.yaml", x.borrow());
