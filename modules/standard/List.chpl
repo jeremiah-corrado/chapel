@@ -966,6 +966,24 @@ module List {
       return result;
     }
 
+    proc const ref insertCpy(idx: int, pragma "no auto destroy" in x: eltType): (bool, list(eltType))
+      lifetime this < x {
+      var inBounds = false,
+          listCpy : list(eltType);
+
+      _enter();
+
+      if _withinBounds(idx) {
+        inBounds = true;
+        listCpy = new list(this);
+        listCpy.insert(idx, x);
+      }
+      _leave();
+      if !inBounds then _destroy(x);
+
+      return (inBounds, );
+    }
+
     pragma "no doc"
     proc ref _insertGenericKnownSize(idx: int, items, size: int): bool {
       var result = false;
@@ -1146,6 +1164,13 @@ module List {
       return result;
     }
 
+    proc const ref removeCpy(x: eltType, count:int=1): (int, list(eltType)) {
+      var lstCpy: list(eltType) = new list(this);
+      var removed = lstCpy.remove(x, count);
+
+      return (removed, lstCpy);
+    }
+
     //
     // Not sure if strictly necessary, since we're probably only going to
     // call this from `pop`, but I added `unlockBeforeHalt` all the same.
@@ -1238,6 +1263,16 @@ module List {
       var result = _popAtIndex(idx);
       _leave();
       return result;
+    }
+
+    proc const ref pop(idx: int): (eltType, list(eltType)) {
+      var lstCpy: list(eltType),
+          result: eltType;
+      _enter();
+      lstCpy = new list(this);
+      result = lstCpy.pop(idx);
+      _leave();
+      return (result, lstCpy);
     }
 
     //
