@@ -1,0 +1,35 @@
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x60000284c180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001340040
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x600002840000
+0: $CHPL_HOME/modules/internal/DefaultRectangular.chpl:100: allocate 72B of DefaultRectangularDom(1,int(64),false) at 0x600002540000
+0: $CHPL_HOME/modules/internal/DefaultRectangular.chpl:679: allocate 128B of DefaultRectangularArr(1,int(64),false,int(64),int(64)) at 0x600002840080
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 8B of array elements at 0x6000004403e0
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x600002840100
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x60000134c500
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 128B of array elements at 0x600002840000
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x600002840000
+0: $CHPL_HOME/modules/internal/DefaultRectangular.chpl:1136: free 8B of array elements at 0x6000004403e0
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1943: free 128B of DefaultRectangularArr(1,int(64),false,int(64),int(64)) at 0x600002840080
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1943: free 72B of DefaultRectangularDom(1,int(64),false) at 0x600002540000
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001340040
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x60000284c180
+=============================================================== Memory Leaks ===============================================================
+Allocated Memory (Bytes)                                    Number   Size     Total    Description                      Address             
+============================================================================================================================================
+$CHPL_HOME/modules/internal/DefaultRectangular.chpl:679     1        128      128      DefaultRectangularArr(1,int(64),false,int(64),int(64))0x000060000284c000  
+$CHPL_HOME/modules/internal/DefaultRectangular.chpl:100     1        72       72       DefaultRectangularDom(1,int(64),false)0x000060000254c050  
+$CHPL_HOME/modules/internal/ChapelBase.chpl:1051            16       8        128      array elements                   0x0000600002840100  
+$CHPL_HOME/modules/internal/ChapelBase.chpl:1051            8        8        64       array elements                   0x0000600001340000  
+$CHPL_HOME/modules/internal/ChapelBase.chpl:1051            16       8        128      array elements                   0x000060000284c080  
+$CHPL_HOME/modules/internal/ChapelBase.chpl:1051            10       8        80       array elements                   0x000060000254c0a0  
+$CHPL_HOME/modules/internal/ChapelBase.chpl:1051            16       8        128      array elements                   0x0000600002840000  
+$CHPL_HOME/modules/internal/ChapelBase.chpl:1051            8        8        64       array elements                   0x000060000134c500  
+$CHPL_HOME/modules/internal/ChapelBase.chpl:1051            16       8        128      array elements                   0x000060000284c100  
+$CHPL_HOME/modules/internal/ChapelUtil.chpl:210             1        32       32       chpl_ModuleDeinit                0x0000600000640040  
+$CHPL_HOME/modules/internal/ChapelUtil.chpl:210             1        32       32       chpl_ModuleDeinit                0x0000600000640020  
+============================================================================================================================================
+
+memStats: Allocated Now:               984
+memStats: Allocation High Water Mark: 1384
+memStats: Sum of Allocations:         2328
+memStats: Sum of Frees:               1344

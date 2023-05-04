@@ -1,0 +1,243 @@
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4100
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4040
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/DefaultRectangular.chpl:100: allocate 72B of DefaultRectangularDom(1,int(64),false) at 0x600002aec000
+0: $CHPL_HOME/modules/internal/DefaultRectangular.chpl:679: allocate 128B of DefaultRectangularArr(1,int(64),false,int(64),int(64)) at 0x6000027e4200
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 8B of array elements at 0x600000bf8040
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4280
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4080
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4080
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4280
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4280
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4080
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4080
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4280
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4280
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4080
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4080
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4280
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4280
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4080
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4080
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4280
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4280
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4080
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4080
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4280
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4280
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4080
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4080
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4280
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4280
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4080
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4380
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4400
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4080
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4280
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4280
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4080
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4480
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 128B of array elements at 0x6000027e4400
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4380
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4380
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4400
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4380
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4380
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4400
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4400
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4380
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4380
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4080
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 128B of array elements at 0x6000027e4480
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4280
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4280
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 64B of array elements at 0x600001ce4080
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1051: allocate 128B of array elements at 0x6000027e4480
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4100
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 128B of array elements at 0x6000027e4300
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4380
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce40c0
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 128B of array elements at 0x6000027e4180
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4400
+0: $CHPL_HOME/modules/internal/DefaultRectangular.chpl:1136: free 8B of array elements at 0x600000bf8040
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1943: free 128B of DefaultRectangularArr(1,int(64),false,int(64),int(64)) at 0x6000027e4200
+0: $CHPL_HOME/modules/internal/ChapelBase.chpl:1943: free 72B of DefaultRectangularDom(1,int(64),false) at 0x600002aec000
+0: $CHPL_HOME/modules/standard/List.chpl:535: free 64B of array elements at 0x600001ce4040
+0: $CHPL_HOME/modules/standard/List.chpl:522: free 128B of array elements at 0x6000027e4100
+=============================================================== Memory Leaks ===============================================================
+Allocated Memory (Bytes)                                    Number   Size     Total    Description                      Address             
+============================================================================================================================================
+$CHPL_HOME/modules/internal/DefaultRectangular.chpl:679     1        128      128      DefaultRectangularArr(1,int(64),false,int(64),int(64))0x00006000027e0280  
+$CHPL_HOME/modules/internal/DefaultRectangular.chpl:100     1        72       72       DefaultRectangularDom(1,int(64),false)0x0000600002ae0f00  
+$CHPL_HOME/modules/internal/ChapelBase.chpl:1051            8        8        64       array elements                   0x0000600001ce4000  
+$CHPL_HOME/modules/internal/ChapelBase.chpl:1051            10       8        80       array elements                   0x0000600002ae0f50  
+$CHPL_HOME/modules/internal/ChapelBase.chpl:1051            16       8        128      array elements                   0x00006000027e4480  
+$CHPL_HOME/modules/internal/ChapelBase.chpl:1051            16       8        128      array elements                   0x00006000027e4000  
+$CHPL_HOME/modules/internal/ChapelBase.chpl:1051            8        8        64       array elements                   0x0000600001ce4080  
+$CHPL_HOME/modules/internal/ChapelBase.chpl:1051            16       8        128      array elements                   0x00006000027e4080  
+$CHPL_HOME/modules/internal/ChapelBase.chpl:1051            16       8        128      array elements                   0x00006000027e4280  
+$CHPL_HOME/modules/internal/ChapelUtil.chpl:210             1        32       32       chpl_ModuleDeinit                0x00006000009e14c0  
+$CHPL_HOME/modules/internal/ChapelUtil.chpl:210             1        32       32       chpl_ModuleDeinit                0x00006000009e14e0  
+============================================================================================================================================
+
+memStats: Allocated Now:                984
+memStats: Allocation High Water Mark:  2024
+memStats: Sum of Allocations:         12568
+memStats: Sum of Frees:               11584

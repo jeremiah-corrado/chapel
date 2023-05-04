@@ -1,8 +1,15 @@
-use List;
-
+use List, Time, Random;
 use Memory.Diagnostics;
 
-proc insertSortCpy(in values: list(int)): list(int) {
+config param useInsertCpy = true,
+             memDiag = false;
+
+config const verbose = false,
+             n = 100;
+
+proc insertSort(in values: list(int)): list(int)
+  where useInsertCpy == true
+{
   var sorted = new list([values.pop()]);
   while values.size > 0 {
     var next = values.pop();
@@ -20,7 +27,9 @@ proc insertSortCpy(in values: list(int)): list(int) {
   return sorted;
 }
 
-proc insertSort(in values: list(int)): list(int) {
+proc insertSort(in values: list(int)): list(int)
+  where useInsertCpy == false
+{
   var sorted = new list([values.pop()]);
   while values.size > 0 {
     var next = values.pop();
@@ -37,16 +46,21 @@ proc insertSort(in values: list(int)): list(int) {
   return sorted;
 }
 
-var unsorted = new list([3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5]);
+var x : [0..<n] int; fillRandom(x);
+var unsorted = new list(x);
 
-startVerboseMemHere();
-var sortedViaCopyInsert = insertSortCpy(unsorted);
-stopVerboseMemHere();
+var s = new stopwatch();
+s.start();
+if memDiag then startVerboseMemHere();
+var sorted = insertSort(unsorted);
+if memDiag then stopVerboseMemHere();
+s.stop();
 
-// startVerboseMemHere();
-var sortedViaInsert = insertSort(unsorted);
-// stopVerboseMemHere();
+if verbose {
+  if n <= 20 then writeln("unsorted: ", unsorted);
+  if n <= 20 then writeln("sorted: ", sorted);
+  writeln("elpased: ", s.elapsed());
+}
 
-writeln("unsorted: ", unsorted);
-writeln("sortedViaCopyInsert: ", sortedViaCopyInsert);
-writeln("sortedViaInsert: ", sortedViaInsert);
+if memDiag then printMemAllocs();
+if memDiag then printMemAllocStats();
