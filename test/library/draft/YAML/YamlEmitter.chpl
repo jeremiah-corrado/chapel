@@ -88,7 +88,7 @@ private extern proc yaml_scalar_event_initialize(
                     ): c_int;
 private extern proc yaml_alias_event_initialize(event: c_ptr(yaml_event_t), anchor: c_ptr(c_uchar)): c_int;
 private extern proc yaml_event_delete(event: c_ptr(yaml_event_t));
-private extern proc yaml_document_end_event_initialize(event: c_ptr(yaml_event_t)): c_int;
+private extern proc yaml_document_end_event_initialize(event: c_ptr(yaml_event_t), implicit: c_int): c_int;
 private extern proc yaml_stream_end_event_initialize(event: c_ptr(yaml_event_t)): c_int;
 
 private extern proc fopen(filename: c_string, mode: c_string): c_FILE;
@@ -148,7 +148,7 @@ proc emitYamlDocument(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: b
   emitYamlValue(emitter, event, v);
 
   // end document
-  if !yaml_document_end_event_initialize(c_ptrTo(event))
+  if !yaml_document_end_event_initialize(c_ptrTo(event), 1)
     then throw new Error("failed to initialize document end event");
   if !yaml_emitter_emit(c_ptrTo(emitter), c_ptrTo(event))
     then throw new Error("failed to emit document end event");
@@ -167,6 +167,7 @@ proc emitYamlValue(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: borr
 
 proc emitYamlScalar(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: borrowed YamlScalar) throws {
   const (c_val, len) = v.getCValue();
+  const tag = if v.tag == "" then nil else v.tag.buff;
 
   if !yaml_scalar_event_initialize(
         c_ptrTo(event),
@@ -176,7 +177,7 @@ proc emitYamlScalar(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: bor
         len,
         1,
         1,
-        YAML_ANY_SCALAR_STYLE
+        YAML_PLAIN_SCALAR_STYLE
       )
     then throw new Error("failed to initialize scalar event");
 
