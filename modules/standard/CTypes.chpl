@@ -93,6 +93,12 @@ module CTypes {
     ``c_void_ptr`` or with ``nil``, and casting to another ``c_ptr`` type or to
     the ``c_void_ptr`` type.
 
+    Casting directly to a ``c_ptr`` of another pointee type is supported, but
+    will emit a safety warning for casts that can lead to violation of C's
+    strict aliasing rule. Casting to a char pointee type or across signedness,
+    or through an intermediate cast to ``c_void_ptr``, will not generate a
+    warning.
+
     As with a Chapel class, a ``c_ptr`` can be tested non-nil simply
     by including it in an if statement conditional, like so:
 
@@ -135,6 +141,30 @@ module CTypes {
       return __primitive("array_get", this, 0);
     }
     /* Print this pointer */
+    inline proc writeThis(ch) throws {
+      (this:c_void_ptr).writeThis(ch);
+    }
+  }
+
+  /*
+    Like ``c_ptr``, but for a pointer to const data. In C, this is equivalent to
+    the type `const eltType*`.
+  */
+  // TODO: avoid redundant c_ptr pragma with c_ptrConst pragma
+  pragma "data class"
+  pragma "no object"
+  pragma "no default functions"
+  pragma "no wide class"
+  pragma "c_ptr class"
+  pragma "c_ptrConst class"
+  class c_ptrConst {
+    type eltType;
+    inline proc this(i: integral) const ref {
+      return __primitive("array_get", this, i);
+    }
+    inline proc deref() const ref {
+      return __primitive("array_get", this, 0);
+    }
     inline proc writeThis(ch) throws {
       (this:c_void_ptr).writeThis(ch);
     }
@@ -286,7 +316,19 @@ module CTypes {
   }
 
   pragma "no doc"
+  inline operator c_ptrConst.=(ref lhs:c_ptrConst, rhs:c_ptrConst) {
+    if lhs.eltType != rhs.eltType then
+      compilerError("element type mismatch in c_ptrConst assignment");
+    __primitive("=", lhs, rhs);
+  }
+
+  pragma "no doc"
   inline operator c_ptr.=(ref lhs:c_ptr, rhs:_nilType) {
+    __primitive("=", lhs, nil);
+  }
+
+  pragma "no doc"
+  inline operator c_ptrConst.=(ref lhs:c_ptrConst, rhs:_nilType) {
     __primitive("=", lhs, nil);
   }
 
@@ -298,13 +340,99 @@ module CTypes {
 
   // Note: we rely from nil to pointer types for ptr = nil, nil:ptr cases
 
+  /* Helper function for determining if casting between two types as pointee
+     types violates C strict aliasing rules. Only checks for types that have c_*
+     equivalents.
+   */
+  pragma "no doc"
+  inline proc pointeeCastStrictAliasingAllowed(type from, type to) param
+      : bool {
+    // special checking when either to or from is a pointer
+    if (isAnyCPtr(from) || isAnyCPtr(to)) {
+      // allow casting to and from void pointer pointee type
+      if (from == c_void_ptr || to == c_void_ptr) {
+        return true;
+      } else if (isAnyCPtr(from) && isAnyCPtr(to)) {
+        // if from and to are both pointer types themselves, recurse into their
+        // respective pointee types (strip a layer of indirection)
+        return pointeeCastStrictAliasingAllowed(from.eltType, to.eltType);
+      } else if (from == c_string) {
+        // a c_string can be interpreted as a pointer to c_char for this purpose
+        return pointeeCastStrictAliasingAllowed(c_char, to.eltType);
+      } else if (to == c_string) {
+        return pointeeCastStrictAliasingAllowed(from.eltType, c_char);
+      }
+    }
+    // allow identical types
+    if (from == to) {
+      return true;
+    }
+    // allow aliasing to any char type
+    if (to == int(8) || to == uint(8)) {
+      return true;
+    }
+    // allow types differing only in signedness
+    if ((isIntegralType(from) && isIntegralType(to) ||
+         isRealType(from) && isRealType(to)) &&
+        numBytes(from) == numBytes(to)) {
+      return true;
+    }
+    // otherwise, return false
+    return false;
+  }
+
   pragma "no doc"
   inline operator c_ptr.:(x:c_ptr, type t:c_ptr) {
+    // emit warning for C strict aliasing violations
+    if (!pointeeCastStrictAliasingAllowed(x.eltType, t.eltType)) {
+      compilerWarning(
+          "This cast from '" + x.type:string + "' to '" + t:string +
+          "' casts a c_ptr to a pointer of non-equivalent, non-char " +
+          "element type, which can cause undefined behavior.");
+    }
+    return __primitive("cast", t, x);
+  }
+  pragma "no doc"
+  inline operator c_ptrConst.:(x:c_ptrConst, type t:c_ptrConst) {
+    // emit warning for C strict aliasing violations
+    if (!pointeeCastStrictAliasingAllowed(x.type, t)) {
+      compilerWarning(
+          "This cast from '" + x.type:string + "' to '" + t:string +
+          "' casts a c_ptrConst to a pointer of non-equivalent, non-char " +
+          "element type, which can cause undefined behavior.");
+    }
+    return __primitive("cast", t, x);
+  }
+  // Also need const to non-const and vice-versa versions; although coercion
+  // makes the casting extraneous, it is needed for strict aliasing warnings
+  pragma "no doc"
+  inline operator c_ptrConst.:(x:c_ptrConst, type t:c_ptr) {
+    if (!pointeeCastStrictAliasingAllowed(x.type, t)) {
+      compilerWarning(
+          "This cast from '" + x.type:string + "' to '" + t:string +
+          "' casts a c_ptrConst to a pointer of non-equivalent, non-char " +
+          "element type, which can cause undefined behavior.");
+    }
+    return __primitive("cast", t, x);
+  }
+  pragma "no doc"
+  inline operator c_ptr.:(x:c_ptr, type t:c_ptrConst) {
+    if (!pointeeCastStrictAliasingAllowed(x.type, t)) {
+      compilerWarning(
+          "This cast from '" + x.type:string + "' to '" + t:string +
+          "' casts a c_ptr to a pointer of non-equivalent, non-char " +
+          "element type, which can cause undefined behavior.");
+    }
     return __primitive("cast", t, x);
   }
   pragma "no doc"
   inline operator :(ref x:c_array, type t:c_ptr(?e)) where x.eltType == e {
     return c_ptrTo(x[0]);
+  }
+  pragma "no doc"
+  inline operator :(const ref x:c_array, type t:c_ptrConst(?e))
+      where x.eltType == e {
+    return c_ptrTo(x[0]):c_ptrConst(e);
   }
   pragma "no doc"
   inline operator :(ref x:c_array, type t:c_void_ptr) {
@@ -315,7 +443,15 @@ module CTypes {
     return __primitive("cast", t, x);
   }
   pragma "no doc"
+  inline operator :(x:c_ptrConst, type t:c_void_ptr) {
+    return __primitive("cast", t, x);
+  }
+  pragma "no doc"
   inline operator :(x:c_void_ptr, type t:c_ptr) {
+    return __primitive("cast", t, x);
+  }
+  pragma "no doc"
+  inline operator :(x:c_void_ptr, type t:c_ptrConst) {
     return __primitive("cast", t, x);
   }
   pragma "no doc"
@@ -326,6 +462,12 @@ module CTypes {
   }
   pragma "no doc"
   inline operator c_ptr.:(x:c_ptr, type t:string) {
+    try! {
+      return createStringWithOwnedBuffer(__primitive("ref to string", x));
+    }
+  }
+  pragma "no doc"
+  inline operator c_ptrConst.:(x:c_ptrConst, type t:string) {
     try! {
       return createStringWithOwnedBuffer(__primitive("ref to string", x));
     }
@@ -387,6 +529,12 @@ module CTypes {
   pragma "no doc"
   inline operator :(x:c_ptr, type t:c_uintptr) do
     return __primitive("cast", t, x);
+  pragma "no doc"
+  inline operator :(x:c_ptrConst, type t:c_intptr) do
+    return __primitive("cast", t, x);
+  pragma "no doc"
+  inline operator :(x:c_ptrConst, type t:c_uintptr) do
+    return __primitive("cast", t, x);
 
 
   // casts from c pointer to int / uint
@@ -403,6 +551,12 @@ module CTypes {
     return __primitive("cast", t, x);
   pragma "no doc"
   inline operator c_ptr.:(x:c_ptr, type t:uint) where c_uintptr != uint do
+    return __primitive("cast", t, x);
+  pragma "no doc"
+  inline operator c_ptrConst.:(x:c_ptrConst, type t:int) where c_intptr != int do
+    return __primitive("cast", t, x);
+  pragma "no doc"
+  inline operator c_ptrConst.:(x:c_ptrConst, type t:uint) where c_uintptr != uint do
     return __primitive("cast", t, x);
 
   // casts from c_intptr / c_uintptr to c_void_ptr
@@ -427,6 +581,11 @@ module CTypes {
   inline operator c_ptr.==(a: c_ptr, b: c_ptr) where a.eltType == b.eltType {
     return __primitive("ptr_eq", a, b);
   }
+  pragma "no doc"
+  inline operator c_ptrConst.==(a: c_ptrConst, b: c_ptrConst)
+      where a.eltType == b.eltType {
+    return __primitive("ptr_eq", a, b);
+  }
 
   pragma "no doc"
   inline operator ==(a: c_ptr, b: c_void_ptr) {
@@ -434,6 +593,14 @@ module CTypes {
   }
   pragma "no doc"
   inline operator ==(a: c_void_ptr, b: c_ptr) {
+    return __primitive("ptr_eq", a, b);
+  }
+  pragma "no doc"
+  inline operator ==(a: c_ptrConst, b: c_void_ptr) {
+    return __primitive("ptr_eq", a, b);
+  }
+  pragma "no doc"
+  inline operator ==(a: c_void_ptr, b: c_ptrConst) {
     return __primitive("ptr_eq", a, b);
   }
   // Don't need _nilType versions -
@@ -444,11 +611,24 @@ module CTypes {
     return __primitive("ptr_neq", a, b);
   }
   pragma "no doc"
+  inline operator c_ptrConst.!=(a: c_ptrConst, b: c_ptrConst)
+      where a.eltType == b.eltType {
+    return __primitive("ptr_neq", a, b);
+  }
+  pragma "no doc"
   inline operator !=(a: c_ptr, b: c_void_ptr) {
     return __primitive("ptr_neq", a, b);
   }
   pragma "no doc"
   inline operator !=(a: c_void_ptr, b: c_ptr) {
+    return __primitive("ptr_neq", a, b);
+  }
+  pragma "no doc"
+  inline operator !=(a: c_ptrConst, b: c_void_ptr) {
+    return __primitive("ptr_neq", a, b);
+  }
+  pragma "no doc"
+  inline operator !=(a: c_void_ptr, b: c_ptrConst) {
     return __primitive("ptr_neq", a, b);
   }
 
@@ -462,7 +642,23 @@ module CTypes {
   inline operator c_ptr.-(a: c_ptr, b: integral) do return __primitive("-", a, b);
 
   pragma "no doc"
+  inline operator c_ptrConst.!(x: c_ptrConst) do return x == c_nil;
+
+  pragma "no doc"
+  inline operator c_ptrConst.+(a: c_ptrConst, b: integral) do
+    return __primitive("+", a, b);
+
+  pragma "no doc"
+  inline operator c_ptrConst.-(a: c_ptrConst, b: integral) do
+    return __primitive("-", a, b);
+
+  pragma "no doc"
   inline operator c_ptr.-(a: c_ptr(?t), b: c_ptr(t)):c_ptrdiff {
+    return c_pointer_diff(a, b, c_sizeof(a.eltType):c_ptrdiff);
+  }
+
+  pragma "no doc"
+  inline operator c_ptrConst.-(a: c_ptrConst(?t), b: c_ptrConst(t)):c_ptrdiff {
     return c_pointer_diff(a, b, c_sizeof(a.eltType):c_ptrdiff);
   }
 
@@ -472,13 +668,14 @@ module CTypes {
   extern proc c_pointer_return(ref x:?t):c_ptr(t);
   pragma "no doc"
   pragma "fn synchronization free"
+  pragma "codegen for CPU and GPU"
+  extern proc c_pointer_return_const(const ref x:?t):c_ptrConst(t);
+  pragma "no doc"
+  pragma "fn synchronization free"
   extern proc c_pointer_diff(a:c_void_ptr, b:c_void_ptr,
                              eltSize:c_ptrdiff):c_ptrdiff;
 
-
-
   /*
-
     Returns a :type:`c_ptr` to the elements of a non-distributed
     Chapel rectangular array.  Note that the existence of this
     :type:`c_ptr` has no impact on the lifetime of the array.  The
@@ -489,12 +686,15 @@ module CTypes {
     :arg arr: the array for which a pointer should be returned
     :returns: a pointer to the array's elements
   */
-  inline proc c_ptrTo(arr: []) {
+  inline proc c_ptrTo(arr: []): c_ptr(arr.eltType) {
     if (!arr.isRectangular() || !arr.domain.dist._value.dsiIsLayout()) then
       compilerError("Only single-locale rectangular arrays support c_ptrTo() at present");
 
     if (arr._value.locale != here) then
-      halt("c_ptrTo() can only be applied to an array from the locale on which it lives (array is on locale " + arr._value.locale.id:string + ", call was made on locale " + here.id:string + ")");
+      halt(
+          "c_ptrTo() can only be applied to an array from the locale on " +
+          "which it lives (array is on locale " + arr._value.locale.id:string +
+          ", call was made on locale " + here.id:string + ")");
 
     if boundsChecking {
       if (arr.size == 0) then
@@ -503,28 +703,180 @@ module CTypes {
 
     return c_pointer_return(arr[arr.domain.low]);
   }
+  /*
+   Like c_ptrTo for arrays, but returns a :type:`c_ptrConst` which disallows
+   direct modification of the pointee.
+   */
+  inline proc c_ptrToConst(const arr: []): c_ptrConst(arr.eltType) {
+    if (!arr.isRectangular() || !arr.domain.dist._value.dsiIsLayout()) then
+      compilerError("Only single-locale rectangular arrays support c_ptrToConst() at present");
 
-  /* Returns a :type:`c_ptr` to any Chapel object.
+    if (arr._value.locale != here) then
+      halt(
+          "c_ptrToConst() can only be applied to an array from the locale on " +
+          "which it lives (array is on locale " + arr._value.locale.id:string +
+          ", call was made on locale " + here.id:string + ")");
+
+    if boundsChecking {
+      if (arr.size == 0) then
+        halt("Can't create a C pointer for an array with 0 elements.");
+    }
+
+    return c_pointer_return_const(arr[arr.domain.low]);
+  }
+
+  /*
+    Returns a :type:`c_ptr` to the underlying buffer of a :type:`~String.string`
+
+    Note that the existence of this ``c_ptr`` has no impact on the lifetime of
+    the ``string``.  The returned pointer will be invalid if the ``string`` is
+    freed or even reallocated.
+
+    Halts if the ``string`` is empty and bounds checking is enabled.
+  */
+  inline proc c_ptrTo(ref s: string): c_ptr(c_uchar) {
+    if boundsChecking {
+      if (s.buffLen == 0) then
+        halt("Can't create a C pointer for an empty string.");
+    }
+    return c_pointer_return(s.buff[0]);
+  }
+
+  /*
+   Like ``c_ptrTo`` for :type:`~String.string`, but returns a :type:`c_ptrConst`
+   which disallows direct modification of the pointee.
+   */
+  inline proc c_ptrToConst(const ref s: string): c_ptrConst(c_uchar) {
+    if boundsChecking {
+      if (s.buffLen == 0) then
+        halt("Can't create a C pointer for an empty string.");
+    }
+    return c_pointer_return_const(s.buff[0]);
+  }
+
+  /*
+    Returns a :type:`c_ptr` to the underlying buffer of a :type:`~Bytes.bytes`
+
+    Note that the existence of this ``c_ptr`` has no impact on the lifetime of
+    the ``bytes``.  The returned pointer will be invalid if the ``bytes`` is
+    freed or even reallocated.
+
+    Halts if the ``bytes`` is empty and bounds checking is enabled.
+  */
+  inline proc c_ptrTo(ref b: bytes): c_ptr(c_uchar) {
+    if boundsChecking {
+      if (b.buffLen == 0) then
+        halt("Can't create a C pointer for an empty bytes.");
+    }
+    return c_pointer_return(b.buff[0]);
+  }
+
+  /*
+   Like ``c_ptrTo`` for :type:`~Bytes.bytes`, but returns a :type:`c_ptrConst`
+   which disallows direct modification of the pointee.
+   */
+  inline proc c_ptrToConst(const ref b: bytes): c_ptrConst(c_uchar) {
+    if boundsChecking {
+      if (b.buffLen == 0) then
+        halt("Can't create a C pointer for an empty bytes.");
+    }
+    return c_pointer_return_const(b.buff[0]);
+  }
+
+  /*
+    Returns a :type:`c_ptr` to any Chapel object.
     Note that the existence of the :type:`c_ptr` has no impact of the lifetime
     of the object. In many cases the object will be stack allocated and
     could go out of scope even if this :type:`c_ptr` remains.
 
-    :arg x: the by-reference argument to get a pointer to. The argument should
-            not be an array or domain (there is a different overload for arrays).
-            Records, class instances, integral, real, imag, and complex types are
-            supported.
+    :arg x: the by-reference argument to get a pointer to. Domains are not
+            supported, and will cause a compiler error. Records, class
+            instances, integral, real, imag, and complex types are supported.
+            For arrays, strings, or bytes, separate overloads should be used.
     :returns: a pointer to the argument passed by reference
 
   */
   inline proc c_ptrTo(ref x:?t):c_ptr(t) {
+    return c_addrOf(x);
+  }
+
+  /*
+    Like c_ptrTo, but returns a :type:`c_ptrConst` which disallows direct
+    modification of the pointee.
+  */
+  inline proc c_ptrToConst(const ref x:?t): c_ptrConst(t) {
+    return c_addrOfConst(x);
+  }
+
+  @chpldoc.nodoc
+  inline proc c_ptrTo(x: c_fn_ptr) {
+    return x;
+  }
+
+  /*
+    Returns a :type:`c_ptr` to the address of an array.
+
+    This is distinct from :func:`c_ptrTo` in that it returns a pointer to
+    the array object itself, rather than to the first element of the array's
+    buffer.
+
+    Note that the existence of this :type:`c_ptr` has no impact on the lifetime
+    of the array. The returned pointer will be invalid if the array is freed.
+  */
+  inline proc c_addrOf(arr: []) {
+    if (!arr.isRectangular() || !arr.domain.dist._value.dsiIsLayout()) then
+      compilerError("Only single-locale rectangular arrays support c_addrOf() at present");
+
+    if (arr._value.locale != here) then
+      halt(
+          "c_addrOf() can only be applied to an array from the locale on " +
+          "which it lives (array is on locale " + arr._value.locale.id:string +
+          ", call was made on locale " + here.id:string + ")");
+
+    return c_pointer_return(arr);
+  }
+
+  /*
+   Like c_addrOf for arrays, but returns a :type:`c_ptrConst` which disallows
+   direct modification of the pointee.
+  */
+  inline proc c_addrOfConst(arr: []) {
+    if (!arr.isRectangular() || !arr.domain.dist._value.dsiIsLayout()) then
+      compilerError("Only single-locale rectangular arrays support c_addrOfConst() at present");
+
+    if (arr._value.locale != here) then
+      halt(
+          "c_addrOfConst() can only be applied to an array from the locale on " +
+          "which it lives (array is on locale " + arr._value.locale.id:string +
+          ", call was made on locale " + here.id:string + ")");
+
+    return c_pointer_return_const(arr);
+  }
+
+  /*
+    Returns a :type:`c_ptr` to the address of any chapel object.
+
+    Note that the behavior of this procedure is identical to :func:`c_ptrTo`
+    for scalar types. It only differs for arrays, strings, and bytes.
+  */
+  inline proc c_addrOf(ref x: ?t): c_ptr(t) {
     if isDomainType(t) then
-      compilerError("c_ptrTo domain type not supported", 2);
-    // Other cases should be avoided, e.g. sync vars
+      compilerError("c_addrOf domain type not supported", 2);
     return c_pointer_return(x);
   }
 
-  pragma "no doc"
-  inline proc c_ptrTo(x: c_fn_ptr) {
+  /*
+    Like c_addrOf, but returns a :type:`c_ptrConst` which disallows direct
+    modification of the pointee.
+  */
+  inline proc c_addrOfConst(const ref x: ?t): c_ptrConst(t) {
+    if isDomainType(t) then
+      compilerError("c_addrOfConst domain type not supported", 2);
+    return c_pointer_return_const(x);
+  }
+
+  @chpldoc.nodoc
+  inline proc c_addrOf(x: c_fn_ptr) {
     return x;
   }
 
@@ -668,12 +1020,15 @@ module CTypes {
     chpl_here_free(data);
   }
 
-  /* Returns true if t is a c_ptr type or c_void_ptr.
-   */
+  pragma "no doc"
   proc isAnyCPtr(type t:c_ptr) param do return true;
   pragma "no doc"
-  proc isAnyCPtr(type t:c_void_ptr) param do return true;
+  proc isAnyCPtr(type t:c_ptrConst) param do return true;
   pragma "no doc"
+  proc isAnyCPtr(type t:c_void_ptr) param do return true;
+  /*
+     Returns true if t is a c_ptr, c_ptrConst, or c_void_ptr type.
+   */
   proc isAnyCPtr(type t) param do return false;
 
   /*

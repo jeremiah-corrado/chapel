@@ -63,6 +63,7 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/Path.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/ToolOutputFile.h"
 #include "llvm/Target/TargetMachine.h"
@@ -110,6 +111,7 @@
 #include "llvmVer.h"
 
 #include "../../frontend/lib/immediates/prim_data.h"
+#include "chpl/util/clang-integration.h"
 
 #include "global-ast-vecs.h"
 
@@ -182,10 +184,6 @@ struct ClangInfo {
   std::vector<const char*> driverArgsCStrings;
 
   clang::CodeGenOptions codegenOptions;
-  llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> diagOptions;
-  clang::TextDiagnosticPrinter* DiagClient;
-  llvm::IntrusiveRefCntPtr<clang::DiagnosticIDs> DiagID;
-  llvm::IntrusiveRefCntPtr<clang::DiagnosticsEngine> Diags;
 
   clang::CompilerInstance *Clang;
 
@@ -231,10 +229,7 @@ ClangInfo::ClangInfo(
          clangCCArgs(std::move(clangCCArgsIn)),
          clangOtherArgs(std::move(clangOtherArgsIn)),
          clangLDArgs(std::move(clangLDArgsIn)),
-         codegenOptions(), diagOptions(nullptr),
-         DiagClient(nullptr),
-         DiagID(nullptr),
-         Diags(nullptr),
+         codegenOptions(),
          Clang(nullptr),
          Ctx(nullptr),
          cCodeGen(nullptr), cCodeGenAction(nullptr),
@@ -415,13 +410,18 @@ static astlocT getClangDeclLocation(clang::Decl* d) {
 
 
 
+#if HAVE_LLVM_VER >= 150
+typedef MacroInfo::const_tokens_iterator tokens_iterator;
+#else
+typedef MacroInfo::tokens_iterator tokens_iterator;
+#endif
 
 static const bool debugPrintMacros = false;
 
 static void handleMacroExpr(const MacroInfo* inMacro,
                             const IdentifierInfo* origID,
-                            MacroInfo::tokens_iterator start,
-                            MacroInfo::tokens_iterator end,
+                            tokens_iterator start,
+                            tokens_iterator end,
                             VarSymbol*& varRet,
                             TypeDecl*& cTypeRet,
                             ValueDecl*& cValueRet,
@@ -440,7 +440,7 @@ static void handleCallMacro(const IdentifierInfo* origID,
   // expect 'LAPACK_GLOBAL' '(' 'actual1' ',' 'actual2' ')'
   Token actual1, actual2;
   int count = 0;
-  for (MacroInfo::tokens_iterator tok = inMacro->tokens_begin();
+  for (tokens_iterator tok = inMacro->tokens_begin();
        tok != inMacro->tokens_end(); ++tok) {
     count++;
     if (count == 3)
@@ -464,7 +464,7 @@ static void handleCallMacro(const IdentifierInfo* origID,
   // expecting 'identifier' ## '_'
   count = 0;
   Token body1, body2, body3;
-  for (MacroInfo::tokens_iterator tok = calledMacro->tokens_begin();
+  for (tokens_iterator tok = calledMacro->tokens_begin();
        tok != calledMacro->tokens_end(); ++tok) {
     count++;
     if (count == 1) {
@@ -565,8 +565,8 @@ void handleMacro(const IdentifierInfo* id, const MacroInfo* macro)
 }
 
 static void removeMacroOuterParens(const MacroInfo* inMacro,
-                                   MacroInfo::tokens_iterator &start,
-                                   MacroInfo::tokens_iterator &end) {
+                                   tokens_iterator &start,
+                                   tokens_iterator &end) {
 
   if (start == end)
     return;
@@ -574,14 +574,14 @@ static void removeMacroOuterParens(const MacroInfo* inMacro,
   // Remove any number of outer parens e.g. (1), ((1)) -> 1
   int left_parens = 0;
   int right_parens = 0;
-  for (MacroInfo::tokens_iterator cur = end - 1;
+  for (tokens_iterator cur = end - 1;
        cur != start;
        --cur) {
     if(cur->getKind() == tok::r_paren) right_parens++;
     else break;
   }
 
-  for (MacroInfo::tokens_iterator cur = start;
+  for (tokens_iterator cur = start;
        cur != end;
        ++cur) {
     if(cur->getKind() == tok::l_paren) left_parens++;
@@ -590,8 +590,8 @@ static void removeMacroOuterParens(const MacroInfo* inMacro,
 
   int min_parens = (left_parens < right_parens) ? left_parens : right_parens;
   if (min_parens > 0) {
-    MacroInfo::tokens_iterator oldStart = start;
-    MacroInfo::tokens_iterator oldEnd = end;
+    tokens_iterator oldStart = start;
+    tokens_iterator oldEnd = end;
     start = oldStart + min_parens;
     end = oldEnd - min_parens;
     INT_ASSERT(start != oldStart);
@@ -602,12 +602,12 @@ static void removeMacroOuterParens(const MacroInfo* inMacro,
 // finds a parenthesized expression at the start of start..end
 // the expression does not necessarily cover the entire expression.
 static bool findParenthesizedExpr(const MacroInfo* inMacro,
-                                  MacroInfo::tokens_iterator start,
-                                  MacroInfo::tokens_iterator end,
-                                  MacroInfo::tokens_iterator &pStart,
-                                  MacroInfo::tokens_iterator &pEnd) {
+                                  tokens_iterator start,
+                                  tokens_iterator end,
+                                  tokens_iterator &pStart,
+                                  tokens_iterator &pEnd) {
   int inparens = 0;
-  for (MacroInfo::tokens_iterator cur = start; cur != end; ++cur) {
+  for (tokens_iterator cur = start; cur != end; ++cur) {
 
     if (cur->getKind() == tok::l_paren) inparens++;
     if (cur->getKind() == tok::r_paren) inparens--;
@@ -636,8 +636,8 @@ static bool findParenthesizedExpr(const MacroInfo* inMacro,
 // Returns a type/identifier/macro name or NULL if it was not handled
 static const char* handleTypeOrIdentifierExpr(const MacroInfo* inMacro,
                                               const IdentifierInfo* origID,
-                                              MacroInfo::tokens_iterator start,
-                                              MacroInfo::tokens_iterator end,
+                                              tokens_iterator start,
+                                              tokens_iterator end,
                                               IdentifierInfo*& ii) {
   GenInfo* info = gGenInfo;
   ii = NULL;
@@ -779,8 +779,8 @@ static const char* handleTypeOrIdentifierExpr(const MacroInfo* inMacro,
 }
 
 static const char* handleStringExpr(const MacroInfo* inMacro,
-                                    MacroInfo::tokens_iterator start,
-                                    MacroInfo::tokens_iterator end) {
+                                    tokens_iterator start,
+                                    tokens_iterator end) {
   removeMacroOuterParens(inMacro, start, end);
 
   Token tok = *start; // the main token
@@ -805,26 +805,26 @@ static ::Type* getTypeForMacro(const char* name) {
 }
 
 static bool handleNumericCastExpr(const MacroInfo* inMacro,
-                                  MacroInfo::tokens_iterator start,
-                                  MacroInfo::tokens_iterator end,
+                                  tokens_iterator start,
+                                  tokens_iterator end,
                                   Immediate* imm,
                                   const char*& cCastToTypeRet);
 static bool handleNumericUnaryPrefixExpr(const MacroInfo* inMacro,
-                                         MacroInfo::tokens_iterator start,
-                                         MacroInfo::tokens_iterator end,
+                                         tokens_iterator start,
+                                         tokens_iterator end,
                                          Immediate* imm);
 static bool handleNumericLiteralExpr(const MacroInfo* inMacro,
-                                     MacroInfo::tokens_iterator start,
-                                     MacroInfo::tokens_iterator end,
+                                     tokens_iterator start,
+                                     tokens_iterator end,
                                      Immediate* imm);
 static bool handleNumericBinOpExpr(const MacroInfo* inMacro,
-                                   MacroInfo::tokens_iterator start,
-                                   MacroInfo::tokens_iterator end,
+                                   tokens_iterator start,
+                                   tokens_iterator end,
                                    Immediate* imm);
 
 static bool handleNumericExpr(const MacroInfo* inMacro,
-                              MacroInfo::tokens_iterator start,
-                              MacroInfo::tokens_iterator end,
+                              tokens_iterator start,
+                              tokens_iterator end,
                               Immediate* imm,
                               const char*& cCastToTypeRet) {
 
@@ -851,8 +851,8 @@ static bool handleNumericExpr(const MacroInfo* inMacro,
 }
 
 static bool handleNumericCastExpr(const MacroInfo* inMacro,
-                                  MacroInfo::tokens_iterator start,
-                                  MacroInfo::tokens_iterator end,
+                                  tokens_iterator start,
+                                  tokens_iterator end,
                                   Immediate* imm,
                                   const char*& cCastToTypeRet) {
 
@@ -860,8 +860,8 @@ static bool handleNumericCastExpr(const MacroInfo* inMacro,
     return false;
 
   // Check for a cast like '(unsigned int) 12'
-  MacroInfo::tokens_iterator castStart = start;
-  MacroInfo::tokens_iterator castEnd = start;
+  tokens_iterator castStart = start;
+  tokens_iterator castEnd = start;
 
   if (findParenthesizedExpr(inMacro, start, end, castStart, castEnd)) {
     if (castEnd == end)
@@ -931,8 +931,8 @@ static bool handleNumericCastExpr(const MacroInfo* inMacro,
 
 
 static bool handleNumericUnaryPrefixExpr(const MacroInfo* inMacro,
-                                         MacroInfo::tokens_iterator start,
-                                         MacroInfo::tokens_iterator end,
+                                         tokens_iterator start,
+                                         tokens_iterator end,
                                          Immediate* imm) {
   if (start == end)
     return false;
@@ -966,8 +966,8 @@ static bool handleNumericUnaryPrefixExpr(const MacroInfo* inMacro,
 }
 
 static bool handleNumericLiteralExpr(const MacroInfo* inMacro,
-                                     MacroInfo::tokens_iterator start,
-                                     MacroInfo::tokens_iterator end,
+                                     tokens_iterator start,
+                                     tokens_iterator end,
                                      Immediate* imm) {
   if (start == end)
     return false;
@@ -1078,16 +1078,16 @@ static bool handleNumericLiteralExpr(const MacroInfo* inMacro,
 }
 
 static bool handleNumericBinOpExpr(const MacroInfo* inMacro,
-                                   MacroInfo::tokens_iterator start,
-                                   MacroInfo::tokens_iterator end,
+                                   tokens_iterator start,
+                                   tokens_iterator end,
                                    Immediate* imm) {
   // handle select binary operators
   // this only works if the LHS and RHS are either:
   //  parenthesized expressions; or
   //  numeric constants
   bool lhsOk = false;
-  MacroInfo::tokens_iterator lhsStart = start;
-  MacroInfo::tokens_iterator lhsEnd = start;
+  tokens_iterator lhsStart = start;
+  tokens_iterator lhsEnd = start;
 
   // find a LHS constant or parenthesized-expression
   if (start->getKind() == tok::numeric_constant) {
@@ -1102,9 +1102,9 @@ static bool handleNumericBinOpExpr(const MacroInfo* inMacro,
     return false;
 
   bool rhsOk = false;
-  MacroInfo::tokens_iterator op = lhsEnd;
-  MacroInfo::tokens_iterator rhsStart = op + 1;
-  MacroInfo::tokens_iterator rhsEnd = rhsStart;
+  tokens_iterator op = lhsEnd;
+  tokens_iterator rhsStart = op + 1;
+  tokens_iterator rhsEnd = rhsStart;
 
   // find a RHS constant or parenthesized-expression
   if (rhsStart->getKind() == tok::numeric_constant) {
@@ -1148,8 +1148,8 @@ static bool handleNumericBinOpExpr(const MacroInfo* inMacro,
 
 static void handleMacroExpr(const MacroInfo* inMacro,
                             const IdentifierInfo* origID,
-                            MacroInfo::tokens_iterator start,
-                            MacroInfo::tokens_iterator end,
+                            tokens_iterator start,
+                            tokens_iterator end,
                             VarSymbol*& varRet,
                             TypeDecl*& cTypeRet,
                             ValueDecl*& cValueRet,
@@ -1175,7 +1175,7 @@ static void handleMacroExpr(const MacroInfo* inMacro,
   }
 
   if (debugPrint) {
-    for (MacroInfo::tokens_iterator cur = start;
+    for (tokens_iterator cur = start;
          cur != end;
          ++cur) {
       Token t = *cur;
@@ -1324,7 +1324,7 @@ class CCodeGenConsumer final : public ASTConsumer {
     CCodeGenConsumer()
       : ASTConsumer(),
         info(gGenInfo),
-        Diags(info->clangInfo->Diags.get()),
+        Diags(&info->clangInfo->Clang->getDiagnostics()),
         Builder(NULL),
         parseOnly(info->clangInfo->parseOnly),
         savedCtx(NULL)
@@ -1334,6 +1334,9 @@ class CCodeGenConsumer final : public ASTConsumer {
         Builder = CreateLLVMCodeGen(
           *Diags,
           LLVM_MODULE_NAME,
+#if HAVE_LLVM_VER >= 150
+          &info->clangInfo->Clang->getVirtualFileSystem(),
+#endif
           info->clangInfo->Clang->getHeaderSearchOpts(),
           info->clangInfo->Clang->getPreprocessorOpts(),
           info->clangInfo->codegenOptions,
@@ -1561,8 +1564,6 @@ static void finishClang(ClangInfo* clangInfo){
     // This should call Builder->Release()
     clangInfo->cCodeGen->HandleTranslationUnit(*clangInfo->Ctx);
   }
-  clangInfo->Diags.reset();
-  clangInfo->DiagID.reset();
 }
 
 static void deleteClang(ClangInfo* clangInfo){
@@ -1641,31 +1642,32 @@ void setupClang(GenInfo* info, std::string mainFile)
   initializeLlvmTargets();
   std::string triple = getConfiguredTargetTriple();
 
-  // Create a compiler instance to handle the actual work.
-  CompilerInstance* Clang = new CompilerInstance();
-  Clang->createDiagnostics();
-
-  clangInfo->diagOptions = new DiagnosticOptions();
-  clangInfo->DiagClient= new TextDiagnosticPrinter(errs(),&*clangInfo->diagOptions);
-  clangInfo->DiagID = new DiagnosticIDs();
-  DiagnosticsEngine* Diags = NULL;
-  Diags = new DiagnosticsEngine(
-      clangInfo->DiagID, &*clangInfo->diagOptions, clangInfo->DiagClient);
-  if (usingGpuLocaleModel()) {
-    Diags->setSeverityForGroup(diag::Flavor::WarningOrError,
-                               "unknown-cuda-version",
-                               diag::Severity::Ignored);
-  }
-  clangInfo->Diags = Diags;
-  clangInfo->Clang = Clang;
-
-  clang::driver::Driver TheDriver(clangInfo->clangexe, triple, *Diags);
-
-  //   SetInstallDir(argv, TheDriver);
-
   for (auto & arg : clangInfo->driverArgs) {
     clangInfo->driverArgsCStrings.push_back(arg.c_str());
   }
+
+  // Create a compiler instance to handle the actual work.
+  CompilerInstance* Clang = new CompilerInstance();
+  auto diagOptions =
+    chpl::util::wrapCreateAndPopulateDiagOpts(clangInfo->driverArgsCStrings);
+  auto diagClient = new clang::TextDiagnosticPrinter(llvm::errs(),
+                                                     &*diagOptions);
+  auto clangDiags =
+    clang::CompilerInstance::createDiagnostics(diagOptions.release(),
+                                               diagClient,
+                                               /* owned */ true);
+  Clang->setDiagnostics(&*clangDiags);
+
+  if (usingGpuLocaleModel()) {
+    clangDiags->setSeverityForGroup(diag::Flavor::WarningOrError,
+                                    "unknown-cuda-version",
+                                    diag::Severity::Ignored);
+  }
+  clangInfo->Clang = Clang;
+
+  clang::driver::Driver TheDriver(clangInfo->clangexe, triple, *clangDiags);
+
+  //   SetInstallDir(argv, TheDriver);
 
   std::unique_ptr<clang::driver::Compilation> C(
       TheDriver.BuildCompilation(clangInfo->driverArgsCStrings));
@@ -1722,12 +1724,12 @@ void setupClang(GenInfo* info, std::string mainFile)
   bool success = CompilerInvocation::CreateFromArgs(
             Clang->getInvocation(),
             job->getArguments(),
-            *Diags);
+            *clangDiags);
 #else
   bool success = CompilerInvocation::CreateFromArgs(
             Clang->getInvocation(),
             &job->getArguments().front(), (&job->getArguments().back())+1,
-            *Diags);
+            *clangDiags);
 #endif
 
   CompilerInvocation* CI = &Clang->getInvocation();
@@ -1949,7 +1951,13 @@ static llvm::TargetOptions getTargetOptions(
   Options.MCOptions.SplitDwarfFile = CodeGenOpts.SplitDwarfFile;
   Options.MCOptions.MCRelaxAll = CodeGenOpts.RelaxAll;
   Options.MCOptions.MCSaveTempLabels = CodeGenOpts.SaveTempLabels;
+#if HAVE_LLVM_VER >= 150
+  Options.MCOptions.MCUseDwarfDirectory =
+    CodeGenOpts.NoDwarfDirectoryAsm ? llvm::MCTargetOptions::DisableDwarfDirectory
+                                    : llvm::MCTargetOptions::EnableDwarfDirectory;
+#else
   Options.MCOptions.MCUseDwarfDirectory = !CodeGenOpts.NoDwarfDirectoryAsm;
+#endif
   Options.MCOptions.MCNoExecStack = CodeGenOpts.NoExecStack;
   Options.MCOptions.MCIncrementalLinkerCompatible =
       CodeGenOpts.IncrementalLinkerCompatible;
@@ -2202,12 +2210,14 @@ void configurePMBuilder(PassManagerBuilder &PMBuilder, bool forFunctionPasses, i
   PMBuilder.DisableUnrollLoops = !CodeGenOpts.UnrollLoops;
   PMBuilder.LoopsInterleaved = CodeGenOpts.UnrollLoops;
   PMBuilder.MergeFunctions = CodeGenOpts.MergeFunctions;
+#if HAVE_LLVM_VER < 150
 #if HAVE_LLVM_VER > 60
   PMBuilder.PrepareForThinLTO = CodeGenOpts.PrepareForThinLTO;
 #else
   PMBuilder.PrepareForThinLTO = CodeGenOpts.EmitSummaryIndex;
 #endif
   PMBuilder.PrepareForLTO = CodeGenOpts.PrepareForLTO;
+#endif
   PMBuilder.RerollLoops = CodeGenOpts.RerollLoops;
 
   if (gGenInfo->targetMachine)
@@ -2337,11 +2347,27 @@ static bool isTargetCpuValid(const char* targetCpu) {
     }
     bool targetCpuValid = false;
     auto ptr = tgt->createMCSubtargetInfo(triple, "", "");
-    targetCpuValid = ptr->isCPUStringValid(CHPL_TARGET_BACKEND_CPU);
+    targetCpuValid = ptr->isCPUStringValid(CHPL_LLVM_TARGET_CPU);
     delete ptr;
 
     return targetCpuValid;
   }
+}
+
+static std::string generateClangGpuLangArgs() {
+  std::string args = "";
+  if (usingGpuLocaleModel()) {
+    args += "-x ";
+    switch (getGpuCodegenType()) {
+      case GpuCodegenType::GPU_CG_NVIDIA_CUDA:
+        args += "cuda";
+        break;
+      case GpuCodegenType::GPU_CG_AMD_HIP:
+        args += "hip";
+        break;
+    }
+  }
+  return args;
 }
 
 // If we are parsing an extern block with clang, we might
@@ -2352,11 +2378,10 @@ static bool isTargetCpuValid(const char* targetCpu) {
 // This could filter out more aggressively but we do need the
 // paths and defines for the runtime headers to work.
 static void addFilteredArgs(std::vector<std::string>& dst,
-                            std::vector<std::string>& src,
-                            bool parseOnly) {
+                            std::vector<std::string>& src) {
   bool clang = 0 == strcmp(CHPL_TARGET_COMPILER, "llvm") ||
                0 == strcmp(CHPL_TARGET_COMPILER, "clang");
-  bool filter = parseOnly && !clang;
+  bool filter = !clang;
 
   if (filter) {
     for (size_t i = 0; i < src.size(); i++) {
@@ -2380,13 +2405,11 @@ static void addFilteredArgs(std::vector<std::string>& dst,
   }
 }
 
-// if just_parse_filename != NULL, it is a file
-// containing an extern block to parse only
-// (and in that setting there is no need to work with the runtime).
-void runClang(const char* just_parse_filename) {
-  bool parseOnly = (just_parse_filename != NULL);
-  static bool is_installed_fatal_error_handler = false;
-
+static void helpComputeClangArgs(std::string& clangCC,
+                                 std::string& clangCXX,
+                                 std::vector<std::string>& clangCCArgs,
+                                 std::vector<std::string>& clangOtherArg,
+                                 std::vector<std::string>& clangLDArgs) {
   // These warnings are _required_ to make sure the code Clang generates
   // when compiling the code in Chapel 'extern' blocks will play well
   // with our backend.
@@ -2409,16 +2432,12 @@ void runClang(const char* just_parse_filename) {
   const char* clang_fast_float = "-ffast-math";
   const char* clang_ieee_float = "-fno-fast-math";
 
-  std::vector<std::string> split;
-  std::vector<std::string> clangCCArgs;
-  std::vector<std::string> clangOtherArgs;
-  std::vector<std::string> clangLDArgs;
-
-  // find the path to clang and clang++
-  std::string clangCC, clangCXX;
+  BumpPtrAllocator A;
+  StringSaver Saver(A);
 
   // get any args passed to CC/CXX and add them to the builtin clang invocation
-  splitStringWhitespace(CHPL_LLVM_CLANG_C, split);
+  SmallVector<const char *, 0> split;
+  llvm::cl::TokenizeGNUCommandLine(CHPL_LLVM_CLANG_C, Saver, split);
   // set clangCC / clangCXX to just the first argument
   for (size_t i = 0; i < split.size(); i++) {
     if (i == 0) {
@@ -2430,7 +2449,7 @@ void runClang(const char* just_parse_filename) {
     }
   }
   split.clear();
-  splitStringWhitespace(CHPL_LLVM_CLANG_CXX, split);
+  llvm::cl::TokenizeGNUCommandLine(CHPL_LLVM_CLANG_CXX, Saver, split);
   if (split.size() > 0) {
     clangCXX = split[0];
   }
@@ -2460,7 +2479,7 @@ void runClang(const char* just_parse_filename) {
     expandInstallationPaths(args);
 
     // add the arguments, filtering if parsing an extern block
-    addFilteredArgs(clangCCArgs, args, parseOnly);
+    addFilteredArgs(clangCCArgs, args);
   }
 
   // add a -I. so we can find headers named on command line in same dir
@@ -2489,18 +2508,18 @@ void runClang(const char* just_parse_filename) {
   // Add specialization flags
   if (specializeCCode &&
       CHPL_TARGET_CPU_FLAG != NULL &&
-      CHPL_TARGET_BACKEND_CPU != NULL &&
+      CHPL_LLVM_TARGET_CPU != NULL &&
       CHPL_TARGET_CPU_FLAG[0] != '\0' &&
-      CHPL_TARGET_BACKEND_CPU[0] != '\0' &&
+      CHPL_LLVM_TARGET_CPU[0] != '\0' &&
       0 != strcmp(CHPL_TARGET_CPU_FLAG, "none") &&
-      0 != strcmp(CHPL_TARGET_BACKEND_CPU, "none") &&
-      0 != strcmp(CHPL_TARGET_BACKEND_CPU, "unknown")) {
+      0 != strcmp(CHPL_LLVM_TARGET_CPU, "none") &&
+      0 != strcmp(CHPL_LLVM_TARGET_CPU, "unknown")) {
 
     // Check that the requested CPU is valid
-    bool targetCpuValid = isTargetCpuValid(CHPL_TARGET_BACKEND_CPU);
+    bool targetCpuValid = isTargetCpuValid(CHPL_LLVM_TARGET_CPU);
     if (!targetCpuValid) {
       USR_WARN("Unknown target CPU %s -- not specializing",
-               CHPL_TARGET_BACKEND_CPU);
+               CHPL_LLVM_TARGET_CPU);
       std::string triple = getConfiguredTargetTriple();
       USR_PRINT("To see available CPU types, run "
                 "%s --target=%s --print-supported-cpus",
@@ -2510,7 +2529,7 @@ void runClang(const char* just_parse_filename) {
       std::string march = "-m";
       march += CHPL_TARGET_CPU_FLAG;
       march += "=";
-      march += CHPL_TARGET_BACKEND_CPU;
+      march += CHPL_LLVM_TARGET_CPU;
       clangCCArgs.push_back(march);
     }
   }
@@ -2546,8 +2565,44 @@ void runClang(const char* just_parse_filename) {
     std::vector<std::string> args;
     splitStringWhitespace(CHPL_TARGET_SYSTEM_COMPILE_ARGS, args);
     // add the arguments, filtering if parsing an extern block
-    addFilteredArgs(clangCCArgs, args, parseOnly);
+    addFilteredArgs(clangCCArgs, args);
   }
+}
+
+void computeClangArgs(std::vector<std::string>& clangCCArgs) {
+  std::string clangCC, ignoredClangCXX;
+  std::vector<std::string> ignoredOtherArgs, ignoredLDArgs;
+
+  std::vector<std::string> gotCCArgs;
+
+  helpComputeClangArgs(clangCC, ignoredClangCXX,
+                       gotCCArgs,
+                       ignoredOtherArgs, ignoredLDArgs);
+
+  // append clangCC argument first
+  if (clangCC == "") {
+    clangCC = "clang";
+  }
+  clangCCArgs.push_back(clangCC);
+
+  // append the other arguments
+  clangCCArgs.insert(clangCCArgs.end(), gotCCArgs.begin(), gotCCArgs.end());
+}
+
+// if just_parse_filename != NULL, it is a file
+// containing an extern block to parse only
+// (and in that setting there is no need to work with the runtime).
+void runClang(const char* just_parse_filename) {
+  bool parseOnly = (just_parse_filename != NULL);
+  static bool is_installed_fatal_error_handler = false;
+
+  // find the path to clang and clang++
+  std::string clangCC, clangCXX;
+  std::vector<std::string> clangCCArgs;
+  std::vector<std::string> clangOtherArgs;
+  std::vector<std::string> clangLDArgs;
+  helpComputeClangArgs(clangCC, clangCXX,
+                       clangCCArgs, clangOtherArgs, clangLDArgs);
 
   // tell clang to use CUDA/AMD support
   if (usingGpuLocaleModel()) {
@@ -2556,15 +2611,7 @@ void runClang(const char* just_parse_filename) {
 
     // Need to select CUDA/AMD mode in embedded clang to
     // activate the GPU target
-    clangOtherArgs.push_back("-x");
-    switch (getGpuCodegenType()) {
-      case GpuCodegenType::GPU_CG_NVIDIA_CUDA:
-        clangOtherArgs.push_back("cuda");
-        break;
-      case GpuCodegenType::GPU_CG_AMD_HIP:
-        clangOtherArgs.push_back("hip");
-        break;
-    }
+    splitStringWhitespace(generateClangGpuLangArgs(), clangOtherArgs);
 
     std::string gpuArch = std::string("--offload-arch=") + CHPL_GPU_ARCH;
     clangOtherArgs.push_back(gpuArch);
@@ -3381,6 +3428,7 @@ static clang::CanQualType getClangType(::Type* t, bool makeRef) {
   if (makeRef || t->isRef()) {
     ::Type* eltType = t->getValType();
     clang::CanQualType cTy = getClangType(eltType, false);
+    // TODO: const qualify const refs
     cTy = Ctx->getPointerType(cTy);
     return cTy;
   }
@@ -3388,6 +3436,7 @@ static clang::CanQualType getClangType(::Type* t, bool makeRef) {
   if (ts->hasFlag(FLAG_C_PTR_CLASS) || ts->hasFlag(FLAG_DATA_CLASS)) {
     ::Type* eltType = getDataClassType(ts)->type;
     clang::CanQualType cTy = getClangType(eltType, false);
+    // TODO: const qualify const C pointers
     cTy = Ctx->getPointerType(cTy);
     return cTy;
   }
@@ -4578,11 +4627,16 @@ void makeBinaryLLVM(void) {
     cargs += clangInfo->clangCCArgs[i];
   }
 
+  std::string gpuArgs = "";
+  if (usingGpuLocaleModel()) {
+    gpuArgs = generateClangGpuLangArgs() + " -Wno-unknown-cuda-version";
+  }
+
   int filenum = 0;
   while (const char* inputFilename = nthFilename(filenum++)) {
     if (isCSource(inputFilename)) {
       const char* objFilename = objectFileForCFile(inputFilename);
-      std::string cmd = clangCC + " -c -o " + objFilename + " " +
+      std::string cmd = clangCC + " " + gpuArgs + " -c -o " + objFilename + " " +
                         inputFilename + " " + cargs;
 
       mysystem(cmd.c_str(), "Compile C File");

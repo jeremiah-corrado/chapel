@@ -24,17 +24,18 @@
 
 #include "driver.h"
 
+#include "ModuleSymbol.h"
+#include "PhaseTracker.h"
 #include "arg.h"
 #include "chpl.h"
+#include "clangUtil.h"
 #include "config.h"
 #include "files.h"
 #include "library.h"
 #include "log.h"
-#include "ModuleSymbol.h"
 #include "misc.h"
 #include "mysystem.h"
 #include "parser.h"
-#include "PhaseTracker.h"
 #include "primitive.h"
 #include "runpasses.h"
 #include "stmt.h"
@@ -43,10 +44,11 @@
 #include "version.h"
 #include "visibleFunctions.h"
 
-#include "chpl/framework/compiler-configuration.h"
 #include "chpl/framework/Context.h"
+#include "chpl/framework/compiler-configuration.h"
 #include "chpl/parsing/parsing-queries.h"
 #include "chpl/util/chplenv.h"
+#include "chpl/util/clang-integration.h"
 
 #include "chpl/util/assertions.h"
 
@@ -55,9 +57,19 @@
 
 #ifdef HAVE_LLVM
 #include "llvm/Config/llvm-config.h"
+#if HAVE_LLVM_VER >= 140
+#include "llvm/MC/TargetRegistry.h"
+#else
+#include "llvm/Support/TargetRegistry.h"
+#endif
+#include "llvm/Support/TargetSelect.h"
 #endif
 
+
 std::map<std::string, const char*> envMap;
+
+// envMap used as input to getChplEnv
+static std::map<std::string, const char*> envMapChplEnvInput;
 
 char CHPL_HOME[FILENAME_MAX+1] = "";
 
@@ -75,7 +87,7 @@ const char* CHPL_TARGET_PLATFORM = NULL;
 const char* CHPL_TARGET_ARCH = NULL;
 const char* CHPL_TARGET_CPU = NULL;
 const char* CHPL_RUNTIME_CPU = NULL;
-const char* CHPL_TARGET_BACKEND_CPU = NULL;
+const char* CHPL_LLVM_TARGET_CPU = NULL;
 const char* CHPL_TARGET_CPU_FLAG = NULL;
 const char* CHPL_TARGET_COMPILER = NULL;
 const char* CHPL_TARGET_COMPILER_PRGENV = NULL;
@@ -1324,6 +1336,15 @@ static void printStuff(const char* argv0) {
 
 #ifdef HAVE_LLVM
     fprintf(stdout, "  built with LLVM version %s\n", LLVM_VERSION_STRING);
+    llvm::InitializeAllTargets();
+    std::string availableTargets;
+    bool first = true;
+    for (auto target : llvm::TargetRegistry::targets()) {
+      if(!first) { availableTargets += ", "; }
+      first = false;
+      availableTargets += target.getName();
+    }
+    fprintf(stdout, "  available LLVM targets: %s\n", availableTargets.c_str());
 #endif
 
     fPrintCopyright  = true;
@@ -1445,6 +1466,8 @@ static void populateEnvMap() {
   // populates global envMap if the key has not been already set from
   // argument processing
 
+  envMapChplEnvInput = envMap;
+
   // Call printchplenv and collect output into a map
   auto chplEnvResult = chpl::getChplEnv(envMap, CHPL_HOME);
   if (auto err = chplEnvResult.getError()) {
@@ -1483,7 +1506,7 @@ static void setChapelEnvs() {
   CHPL_TARGET_ARCH     = envMap["CHPL_TARGET_ARCH"];
   CHPL_TARGET_CPU      = envMap["CHPL_TARGET_CPU"];
   CHPL_RUNTIME_CPU     = envMap["CHPL_RUNTIME_CPU"];
-  CHPL_TARGET_BACKEND_CPU = envMap["CHPL_TARGET_BACKEND_CPU"];
+  CHPL_LLVM_TARGET_CPU = envMap["CHPL_LLVM_TARGET_CPU"];
   CHPL_TARGET_CPU_FLAG = envMap["CHPL_TARGET_CPU_FLAG"];
   CHPL_TARGET_COMPILER = envMap["CHPL_TARGET_COMPILER"];
   CHPL_TARGET_COMPILER_PRGENV = envMap["CHPL_TARGET_COMPILER_PRGENV"];
@@ -1866,6 +1889,39 @@ static void validateSettings() {
 
 static void dynoConfigureContext(std::string chpl_module_path) {
   INT_ASSERT(gContext != nullptr);
+
+  // Compute a new configuration for the Context
+  chpl::Context::Configuration config;
+  config.chplHome = CHPL_HOME;
+  for (const auto& pair : envMapChplEnvInput) {
+    config.chplEnvOverrides.insert(pair);
+  }
+  if (saveCDir[0]) {
+    ensureDirExists(saveCDir, "ensuring --savec directory exists");
+    config.tmpDir = saveCDir;
+    config.keepTmpDir = true;
+  }
+  config.toolName = "chpl";
+
+  // Replace the current gContext with one using the new configuration.
+  auto oldContext = gContext;
+  gContext = new chpl::Context(*oldContext, std::move(config));
+  delete oldContext;
+
+  // set up the clang arguments
+#ifdef HAVE_LLVM
+  {
+    std::vector<std::string> clangCCArgs;
+    computeClangArgs(clangCCArgs);
+    if (developer && printSystemCommands) {
+      printf("computed clang arguments:\n");
+      for (const auto& arg : clangCCArgs) {
+        printf("  %s\n", arg.c_str());
+      }
+    }
+    chpl::util::setClangFlags(gContext, clangCCArgs);
+  }
+#endif
 
   // Set the config names/values we processed earlier and clear them.
   chpl::parsing::setConfigSettings(gContext, gDynoParams);

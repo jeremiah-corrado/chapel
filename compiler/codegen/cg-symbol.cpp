@@ -1023,6 +1023,7 @@ transformTypeForPointer(Type* type) {
     return referenced->codegen().c + " *";
 
   } else if (type->symbol->hasFlag(FLAG_C_PTR_CLASS)) {
+    // TODO: add const qualifier for const pointers?
     Type* pointedTo = getDataClassType(type->symbol)->typeInfo();
     return pointedTo->codegen().c + " *";
   }

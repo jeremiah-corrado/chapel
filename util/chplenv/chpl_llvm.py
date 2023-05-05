@@ -737,6 +737,8 @@ def filter_llvm_config_flags(flags):
 
     platform_val = chpl_platform.get('host')
     cygwin = platform_val.startswith('cygwin')
+    darwin = platform_val.startswith('darwin')
+    gnu = chpl_compiler.get('host') == 'gnu'
 
     for flag in flags:
         if (flag == '-DNDEBUG' or
@@ -745,6 +747,7 @@ def filter_llvm_config_flags(flags):
             flag.startswith('-O') or
             flag == '-pedantic' or
             flag == '-Wno-class-memaccess' or
+            (darwin and gnu and flag.startswith('-stdlib=')) or
             (cygwin and flag == '-std=c++14')):
             continue # filter out these flags
 
@@ -814,10 +817,12 @@ def get_host_compile_args():
 
     return (bundled, system)
 
-# returns (bundled, system) args for 'make'
-# to link 'chpl' with LLVM
+# returns (bundled, system, static_or_dynamic)
+#  * bundled and system are lists of args for 'make' to link 'chpl' with LLVM
+#  * static_or_dynamic is "static" for static linking or "dynamic"
+#    for dynamic linking or None for unknown
 @memoize
-def get_host_link_args():
+def compute_host_link_settings():
     bundled = [ ]
     system = [ ]
 
@@ -851,7 +856,7 @@ def get_host_link_args():
 
     # quit early if the llvm value is unset
     if llvm_val == 'unset':
-        return (bundled, system)
+        return (bundled, system, None)
 
     # only use LLVMSupport for CHPL_LLVM=none
     if llvm_val == 'none':
@@ -930,6 +935,23 @@ def get_host_link_args():
         else:
             warning("included llvm not built yet")
 
+    static_dynamic = "static"
+    if llvm_dynamic:
+        static_dynamic = "dynamic"
+
+    return (bundled, system, static_dynamic)
+
+# returns whether LLVM and clang will be linked dynamically, statically,
+# or it is unknown, by returning "dynamic" or "static" or None.
+@memoize
+def get_static_dynamic():
+    bundled, system, static_dynamic = compute_host_link_settings()
+    return static_dynamic
+
+# returns (bundled, system) args for 'make' to link 'chpl' with LLVM
+@memoize
+def get_host_link_args():
+    bundled, system, static_dynamic = compute_host_link_settings()
     return (bundled, system)
 
 # Return the isysroot argument provided by get_clang_basic_args, if any

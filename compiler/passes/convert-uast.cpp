@@ -47,6 +47,7 @@
 #include "optimizations.h"
 #include "parser.h"
 #include "resolution.h"
+#include "ResolveScope.h"
 
 #include "chpl/parsing/parsing-queries.h"
 #include "chpl/framework/global-strings.h"
@@ -139,6 +140,7 @@ struct Converter {
   bool inTupleDecl = false;
   bool inTupleAssign = false;
   bool inImportOrUse = false;
+  bool inForwardingDecl = false;
   bool canScopeResolve = false;
   bool trace = false;
   int delegateCounter = 0;
@@ -397,6 +399,12 @@ struct Converter {
       return nullptr;
     }
 
+    // In forwarding declarations, don't convert things in "except" clauses
+    // into SymExprs.
+    if (inForwardingDecl) {
+      return nullptr;
+    }
+
     if (inTupleAssign && node->name() == USTR("_")) {
       // Don't resolve underscore node, just return chpl__tuple_blank.
       return new UnresolvedSymExpr("chpl__tuple_blank");
@@ -407,7 +415,44 @@ struct Converter {
       const resolution::ResolvedExpression* rr = r->byAstOrNull(node);
       if (rr != nullptr) {
         auto id = rr->toId();
-        if (!id.isEmpty()) {
+        if (id.isFabricatedId()) {
+          // Right now, this only covers extern block elements
+          // For those, return nullptr because we can't yet compute
+          // the type of those.
+          // TODO: compute the appropriate 'extern proc' etc and return that
+          CHPL_ASSERT(id.fabricatedIdKind() == ID::ExternBlockElement);
+          return nullptr;
+        } else if (id.isEmpty() && node->name() == USTR("super")) {
+          // The identifier is 'super' and doesn't refer to any variable
+          // of that name, so it's a this.super call. Translate it as such.
+          if (methodThisStack.empty()) {
+            // TODO: probably too strict; what about field initializers?
+            USR_FATAL(node->id(), "super cannot occur outside of a method");
+          }
+          Symbol* parentMethodConvertedThis = methodThisStack.back();
+          auto thisExpr = new SymExpr(parentMethodConvertedThis);
+          auto nameExpr = new_CStringSymbol(node->name().c_str());
+          CallExpr* ret = new CallExpr(".", thisExpr, nameExpr);
+          return ret;
+        } else if (rr->isBuiltin()) {
+          auto scope = ResolveScope::getScopeFor(theProgram->block);
+          if (!scope) scope = ResolveScope::getRootModule();
+
+          if (auto symbol = scope->lookupNameLocally(astr(node->name().c_str()), /* isUse */ false)) {
+            return new SymExpr(symbol);
+          }
+        } else if (!id.isEmpty()) {
+          // Don't resolve non-method, non-parenless function references.
+          //
+          // TODO: it's not quite clear why this is a problem; however, the
+          // symptoms of not doing this check are that forall optimizations
+          // pick the function identifier as something "captured" from outer
+          // scope.
+          if (parsing::idIsFunction(context, id) &&
+              !parsing::idIsMethod(context, id) &&
+              !parsing::idIsParenlessFunction(context, id)) {
+            return nullptr;
+          }
 
           // If we're referring to an associated type in an interface,
           // leave it unconverted for now because the compiler does some
@@ -432,7 +477,7 @@ struct Converter {
           // to the current 'this' type.
           bool isFieldAccess = false;
           Symbol* parentMethodConvertedThis = nullptr;
-          if (parsing::idIsField(context, id)) {
+          if (parsing::idIsField(context, id) || parsing::idIsMethod(context, id)) {
             if (methodThisStack.size() > 0) {
               parentMethodConvertedThis = methodThisStack.back();
               isFieldAccess = true;
@@ -447,20 +492,22 @@ struct Converter {
             Symbol* thisSym = parentMethodConvertedThis;
             INT_ASSERT(thisSym != nullptr);
             auto ast = parsing::idToAst(context, id);
-            INT_ASSERT(ast && ast->isVariable());
-            auto var = ast->toVariable();
-            auto str = new_CStringSymbol(var->name().c_str());
+            INT_ASSERT(ast);
+            UniqueString name;
+            if (auto var = ast->toVariable()) {
+              name = var->name();
+            } else {
+              auto fn = ast->toFunction();
+              INT_ASSERT(fn);
+              name = fn->name();
+            }
+            auto str = new_CStringSymbol(name.c_str());
             CallExpr* ret = new CallExpr(".", thisSym, str);
             return ret;
           }
 
           // handle other Identifiers
           Symbol* sym = findConvertedSym(id);
-          if (sym == nullptr) {
-            // we will fix it later
-            sym = new TemporaryConversionSymbol(id);
-          }
-
           SymExpr* se = new SymExpr(sym);
           Expr* ret = se;
 
@@ -1118,13 +1165,12 @@ struct Converter {
         noteConvertedSym(expr, svs);
         addForallIntent(ret, svs);
       } else {
-        auto r = symStack.back().resolved;
-        if (r != nullptr) {
-          const resolution::ResolvedExpression* rr = r->byAstOrNull(expr);
-          if (rr != nullptr) {
-            if (isTaskVarDecl) {
-              noteConvertedSym(expr, svs);
-            } else {
+        if (isTaskVarDecl) {
+          noteConvertedSym(expr, svs);
+        } else {
+          auto r = symStack.back().resolved;
+          if (r != nullptr) {
+            if (auto rr = r->byAstOrNull(expr)) {
               noteConvertedSym(expr, findConvertedSym(rr->toId()));
             }
           }
@@ -2394,10 +2440,13 @@ struct Converter {
       }
       // convert the AstList of renames
       visNames = new std::vector<PotentialRename*>;
+      auto oldInForwardingDecl = inForwardingDecl;
+      inForwardingDecl = true;
       for (auto lim : vis->limitations()) {
         PotentialRename* rename = convertRename(lim);
         visNames->push_back(rename);
       }
+      inForwardingDecl = oldInForwardingDecl;
       // compute the forwarded-to expression
       expr = convertExprOrNull(vis->symbol());
     } else {
@@ -3771,7 +3820,9 @@ Type* Converter::convertType(const types::QualifiedType qt) {
     case typetags::EnumType:   return convertEnumType(qt);
     case typetags::FunctionType:   return convertFunctionType(qt);
 
+    case typetags::ArrayType: return dtUnknown;
     case typetags::BasicClassType:   return convertBasicClassType(qt);
+    case typetags::DomainType:   return dtUnknown;
     case typetags::RecordType:   return convertRecordType(qt);
     case typetags::TupleType:   return convertTupleType(qt);
     case typetags::UnionType:   return convertUnionType(qt);
@@ -4305,7 +4356,7 @@ Symbol* ConvertedSymbolsMap::findConvertedSym(ID id, bool trace) {
            id.str().c_str(), inSymbolId.str().c_str());
   }
 
-  return nullptr;
+  return new TemporaryConversionSymbol(id);
 }
 
 FnSymbol* ConvertedSymbolsMap::findConvertedFn(
@@ -4372,7 +4423,7 @@ void ConvertedSymbolsMap::applyFixups(chpl::Context* context,
     INT_ASSERT(isTemporaryConversionSymbol(tcsymbol));
 
     Symbol* sym = findConvertedSym(target, /* trace */ false);
-    if (sym == nullptr) {
+    if (isTemporaryConversionSymbol(sym)) {
       INT_FATAL("could not find target symbol for sym fixup for %s within %s",
                 target.str().c_str(), inSymbolId.str().c_str());
     }
