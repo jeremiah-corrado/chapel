@@ -229,7 +229,8 @@ class YamlScalar: YamlValue {
 
   @chpldoc.nodoc
   proc getCValue(): (c_ptr(c_uchar), int(32)) {
-    return (this.value.buff, this.value.numBytes: int(32));
+    // return (this.value.buff, this.value.numBytes: int(32));
+    return (c_ptrTo(this.value), this.value.numBytes: int(32));
   }
 }
 
@@ -353,10 +354,11 @@ class YamlMapping: YamlValue {
   }
 
   @chpldoc.nodoc
-  iter these(): (owned YamlScalar, borrowed YamlValue) {
+  iter these(): (YamlScalar, YamlValue) {
     var keys = mapping.keys();
     for k in keys {
-      yield (new YamlScalar(k), mapping[k]);
+      var kYaml = new YamlScalar(k);
+      yield (kYaml.borrow(), mapping[k].borrow());
     }
   }
 }
@@ -385,7 +387,8 @@ class YamlAlias: YamlValue {
 
   @chpldoc.nodoc
   proc getCValue(): c_ptr(c_uchar) {
-    return this.alias.buff;
+    // return this.alias.buff;
+    return c_ptrTo(this.alias);
   }
 }
 

@@ -139,7 +139,7 @@ proc writeYamlFile(path: string, documents: [] owned YamlValue) throws {
 
 proc emitYamlDocument(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: borrowed YamlValue) throws {
   // start document
-  if !yaml_document_start_event_initialize(c_ptrTo(event), nil, nil, nil, 1)
+  if !yaml_document_start_event_initialize(c_ptrTo(event), nil, nil, nil, 0)
     then throw new Error("failed to initialize document start event");
   if !yaml_emitter_emit(c_ptrTo(emitter), c_ptrTo(event))
     then throw new Error("failed to emit document start event");
@@ -148,7 +148,7 @@ proc emitYamlDocument(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: b
   emitYamlValue(emitter, event, v);
 
   // end document
-  if !yaml_document_end_event_initialize(c_ptrTo(event), 1)
+  if !yaml_document_end_event_initialize(c_ptrTo(event), 0)
     then throw new Error("failed to initialize document end event");
   if !yaml_emitter_emit(c_ptrTo(emitter), c_ptrTo(event))
     then throw new Error("failed to emit document end event");
@@ -167,17 +167,18 @@ proc emitYamlValue(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: borr
 
 proc emitYamlScalar(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: borrowed YamlScalar) throws {
   const (c_val, len) = v.getCValue();
-  const tag = if v.tag == "" then nil else v.tag.buff;
+  var t = v.tag[0..];
+  var tag: c_ptr(c_uchar) = if t == "" then nil else c_ptrTo(t);
 
   if !yaml_scalar_event_initialize(
         c_ptrTo(event),
         nil,
-        nil,
+        tag,
         c_val,
         len,
-        1,
-        1,
-        YAML_PLAIN_SCALAR_STYLE
+        (if t.size > 0 then 0 else 1):c_int,
+        (if t.size > 0 then 0 else 1):c_int,
+        YAML_ANY_SCALAR_STYLE
       )
     then throw new Error("failed to initialize scalar event");
 

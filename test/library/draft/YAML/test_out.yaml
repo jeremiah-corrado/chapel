@@ -1,4 +1,5 @@
-a_general_tag: value
+---
+a_general_tag: !my_tag value
 typed_field: 3.14
 field: '"value"'
 nested_map:
@@ -13,6 +14,7 @@ nested_map:
   - 2
   - 3
 other_typed_field: hello
+...
 ---
 other_multi_line: the newlines in this string will be removed when parsed ...
 booleans_in_yaml:
@@ -23,3 +25,4 @@ other_list:
 - 2.2
 - 3.3
 - 4.4
+...
