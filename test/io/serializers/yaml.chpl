@@ -1,7 +1,7 @@
 module Yaml {
   private use IO;
 
-  config const yamlVerbose = false;
+  config param YamlVerbose = true;
 
   public import this.SerializerHelp.SequenceStyle,
                 this.SerializerHelp.MappingStyle,
@@ -62,7 +62,7 @@ module Yaml {
       //   const valBytes = val: bytes;
       //   (startOffset, endOffset) = this.emitter.emit(valBytes);
 
-      if _isIoPrimitiveType(t) {
+      if _isIoPrimitiveType(t) || isRangeType(t) {
         const valBytes = "%t".format(val): bytes;
         (startOffset, endOffset) = this.emitter.emitScalar(valBytes);
       } else {
@@ -78,7 +78,7 @@ module Yaml {
       }
 
       if contextLevel == 0 && endOffset > 0 {
-        writer.writeBytes(this.emitter.extractBytes(startOffset..endOffset));
+        writer.writeBinary(this.emitter.extractBytes(startOffset..endOffset));
         this.contextStartOffset = endOffset;
       }
     }
@@ -126,7 +126,7 @@ module Yaml {
       const endOffset = this.emitter.endSequence();
       contextLevel -= 1;
       if contextLevel == 0 {
-        writer.writeBytes(this.emitter.extractBytes(this.contextStartOffset..endOffset));
+        writer.writeBinary(this.emitter.extractBytes(this.contextStartOffset..endOffset));
         this.contextStartOffset = endOffset;
       }
     }
@@ -165,7 +165,7 @@ module Yaml {
       const endOffset = this.emitter.endMapping();
       contextLevel -= 1;
       if contextLevel == 0 {
-        writer.writeBytes(this.emitter.extractBytes(this.contextStartOffset..endOffset));
+        writer.writeBinary(this.emitter.extractBytes(this.contextStartOffset..endOffset));
         this.contextStartOffset = endOffset;
       }
     }
@@ -180,7 +180,7 @@ module Yaml {
       const endOffset = this.emitter.endSequence();
       contextLevel -= 1;
       if contextLevel == 0 {
-        writer.writeBytes(this.emitter.extractBytes(this.contextStartOffset..endOffset));
+        writer.writeBinary(this.emitter.extractBytes(this.contextStartOffset..endOffset));
         this.contextStartOffset = endOffset;
       }
     }
@@ -354,6 +354,8 @@ module Yaml {
     private use CTypes;
     require "yaml.h", "-lyaml";
 
+    config param YamlVerbose = true;
+
     // a chapel wrapper around the libyaml emitter
     class LibYamlEmitter {
       var seqStyle: SequenceStyle;
@@ -398,9 +400,13 @@ module Yaml {
       yaml_emitter_set_output_file(c_ptrTo(this.emitter), this.file);
       yaml_emitter_set_canonical(c_ptrTo(this.emitter), 0);
       yaml_emitter_set_unicode(c_ptrTo(this.emitter), 1);
+
+      this._startOutputStream();
+      this.startDocument();
     }
 
     proc LibYamlEmitter.extractBytes(r: range(idxType=uint, stridable=false, ?)): bytes {
+      if YamlVerbose then writeln("Extracting bytes: ", r.low, "..", r.high);
       fseek(this.file, r.low:c_ssize_t, SEEK_SET);
       var buf = c_malloc(uint(8), r.size);
       fread(buf, 1, r.size, this.file);
@@ -412,6 +418,8 @@ module Yaml {
     }
 
     proc LibYamlEmitter.deinit() {
+      try! this.endDocument();
+      try! this._endOutputStream();
       // TODO: fix this after:  https://github.com/chapel-lang/chapel/issues/22073
       // if this.file != nil then
         fclose(this.file);
@@ -424,6 +432,8 @@ module Yaml {
     // ----------------------------------------
 
     proc LibYamlEmitter._startOutputStream() throws {
+      if YamlVerbose then writeln("Starting output stream");
+
       if !yaml_stream_start_event_initialize(
         c_ptrTo(this.event),
         YAML_UTF8_ENCODING
@@ -433,6 +443,8 @@ module Yaml {
     }
 
     proc LibYamlEmitter._endOutputStream() throws {
+      if YamlVerbose then writeln("Ending output stream");
+
       if !yaml_stream_end_event_initialize(c_ptrTo(this.event))
         then throw new YamlEmitterError("Failed to initialize stream end event");
 
@@ -440,6 +452,8 @@ module Yaml {
     }
 
     proc LibYamlEmitter.beginSequence(): uint throws {
+      if YamlVerbose then writeln("Starting sequence");
+
       if !yaml_sequence_start_event_initialize(
         c_ptrTo(this.event),
         nil, // TODO: anchor support
@@ -452,6 +466,8 @@ module Yaml {
     }
 
     proc LibYamlEmitter.endSequence(): uint throws {
+      if YamlVerbose then writeln("Ending sequence");
+
       if !yaml_sequence_end_event_initialize(c_ptrTo(this.event))
         then throw new YamlEmitterError("Failed to initialize sequence end event");
 
@@ -459,6 +475,8 @@ module Yaml {
     }
 
     proc LibYamlEmitter.beginMapping(): uint throws {
+      if YamlVerbose then writeln("Starting mapping");
+
       if !yaml_mapping_start_event_initialize(
         c_ptrTo(this.event),
         nil, // TODO: anchor support
@@ -471,6 +489,8 @@ module Yaml {
     }
 
     proc LibYamlEmitter.endMapping(): uint throws {
+      if YamlVerbose then writeln("Ending mapping");
+
       if !yaml_mapping_end_event_initialize(c_ptrTo(this.event))
         then throw new YamlEmitterError("Failed to initialize mapping end event");
 
@@ -478,6 +498,8 @@ module Yaml {
     }
 
     proc LibYamlEmitter.emitScalar(value: bytes, tag: bytes = b""): 2*uint throws {
+      if YamlVerbose then writeln("Emitting scalar: ", value);
+
       var v = value, t = tag;
       if !yaml_scalar_event_initialize(
         c_ptrTo(this.event),
@@ -522,6 +544,10 @@ module Yaml {
       if !yaml_emitter_emit(c_ptrTo(this.emitter), c_ptrTo(this.event))
         then throw new YamlEmitterError(errorMsg);
 
+      if YamlVerbose then writeln("Emitting event over: ", this.event.start_mark.idx, " to ", this.event.end_mark.idx);
+      // writeln("start column: ", this.event.start_mark.column, " end column: ", this.event.end_mark.column);
+      // writeln("start line: ", this.event.start_mark.line, " end line: ", this.event.end_mark.line);
+
       return (this.event.start_mark.idx, this.event.end_mark.idx);
     }
 
@@ -560,7 +586,7 @@ module Yaml {
     // ----------------------------------------
 
     // relevant types
-    extern record yaml_emitter_t {}
+    extern record yaml_emitter_t { }
     extern record yaml_event_t {
       var start_mark: yaml_mark_t;
       var end_mark: yaml_mark_t;
