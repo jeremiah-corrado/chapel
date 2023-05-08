@@ -655,20 +655,40 @@ module Map {
       _readWriteHelper(ch);
     }
 
+    proc _readHelper(r: fileReader) throws {
+      _enter(); defer _leave();
+      ref fmt = r.deserializer;
+
+      fmt.startMap(r);
+
+      var done = false;
+      while !done {
+        try {
+          add(fmt.readKey(r, keyType), fmt.readValue(r, valType));
+        } catch e: BadFormatError {
+          done = true;
+        }
+      }
+
+      fmt.endMap(r);
+    }
+
     //
     // TODO: rewrite to use formatter interface
     //
     pragma "no doc"
-    proc init(type keyType, type valType, r: fileReader) {
+    proc init(type keyType, type valType,
+              reader: fileReader, ref deserializer) throws {
       this.init(keyType, valType, parSafe);
-      readThis(r);
+      _readHelper(reader);
     }
 
     pragma "no doc"
     @unstable("'Map.parSafe' is unstable")
-    proc init(type keyType, type valType, param parSafe, r: fileReader) {
+    proc init(type keyType, type valType, param parSafe,
+              reader: fileReader, ref deserializer) throws {
       this.init(keyType, valType, parSafe);
-      readThis(r);
+      _readHelper(reader);
     }
 
     /*
@@ -682,6 +702,23 @@ module Map {
     */
     proc writeThis(ch: fileWriter) throws {
       _readWriteHelper(ch);
+    }
+
+    proc serialize(writer: fileWriter(?), ref serializer) throws {
+      _enter(); defer _leave();
+
+      ref fmt = serializer;
+      fmt.startMap(writer, _size);
+
+      for slot in table.allSlots() {
+        if table.isSlotFull(slot) {
+          ref tabEntry = table.table[slot];
+          fmt.writeKey(writer, tabEntry.key);
+          fmt.writeValue(writer, tabEntry.val);
+        }
+      }
+
+      fmt.endMap(writer);
     }
 
     pragma "no doc"
