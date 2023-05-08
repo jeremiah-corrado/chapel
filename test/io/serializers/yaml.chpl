@@ -18,8 +18,11 @@ module Yaml {
   type _readType = fileReader(deserializerType=yamlDeserializer, ?);
 
   record yamlSerializer {
+    @chpldoc.nodoc
     var emitter: unmanaged LibYamlEmitter;
+    @chpldoc.nodoc
     var contextLevel: int = 0;
+    @chpldoc.nodoc
     var contextStartOffset: int = 0;
 
     proc init(
@@ -32,6 +35,7 @@ module Yaml {
       this.emitter.prepSerialization();
     }
 
+    @chpldoc.nodoc
     proc init(
       emitter: unmanaged LibYamlEmitter,
       contextLevel,
@@ -42,25 +46,32 @@ module Yaml {
       this.contextStartOffset = contextStartOffset;
     }
 
+    @chpldoc.nodoc
     proc deinit() {
       delete this.emitter;
     }
 
     proc serializeValue(writer: _writeType, const val: ?t) throws {
       var startOffset, endOffset = 0;
-      import Reflection.canResolve;
+      // import Reflection.canResolve;
 
-      if canResolve(":", val, bytes) {
+      // TODO: should use reflection here, but this is not working:
+      // if canResolve(":", val, bytes) {
+      //   const valBytes = val: bytes;
+      //   (startOffset, endOffset) = this.emitter.emit(valBytes);
+      try {
         const valBytes = val: bytes;
-        (startOffset, endOffset) = this.emitter.emit(valBytes);
-      } else if isClassType(t) {
-        if val == nil {
-          (startOffset, endOffset) = this.emitter.emit("~");
+        (startOffset, endOffset) = this.emitter.emitScaler(valBytes);
+      } catch e {
+        if isClassType(t) {
+          if val == nil {
+            (startOffset, endOffset) = this.emitter.emitScaler("~");
+          } else {
+            val!.serialize(writer, new yamlSerializer(this.emitter, this.contextLevel + 1));
+          }
         } else {
-          val!.serialize(writer, new yamlSerializer(this.emitter, this.contextLevel + 1));
+          val.serialize(writer, new yamlSerializer(this.emitter, this.contextLevel + 1));
         }
-      } else {
-        val.serialize(writer, new yamlSerializer(this.emitter, this.contextLevel + 1));
       }
 
       if contextLevel == 0 && endOffset > 0 {
@@ -187,13 +198,13 @@ module Yaml {
       // this.parser.prepDeserialization(filePath = ????)
     }
 
+    @chpldoc.nodoc
     proc init(other: yamlDeserializer) {
       this.parser = other.parser;
       this.strictTypeParsing = other.strictTypeParsing;
-      this.contextLevel = other.contextLevel + 1;
-      this.contextOffset = 0;
     }
 
+    @chpldoc.nodoc
     proc deinit() {
       delete this.parser;
     }
@@ -224,16 +235,7 @@ module Yaml {
       }
     }
 
-    proc deserializeField(reader: _readType, key: string, type t): t throws {
-      const (keyStart, keyEnd) = this.parser.expectEvent(EventType.Scalar);
-      reader.seek(keyStart..);
-      const foundKey = reader.readString(keyEnd - keyStart);
-
-      if foundKey == key then
-        throw new YamlParserError("Field not found: ", key);
-
-      return this.deserialize(reader, t);
-    }
+    // -------- composite --------
 
     proc startClass(reader: _readType, name: string, size: int) throws {
       const typeName = this._startMapping(reader);
@@ -255,6 +257,19 @@ module Yaml {
       this._endMapping(reader);
     }
 
+    proc deserializeField(reader: _readType, key: string, type t): t throws {
+      const (keyStart, keyEnd) = this.parser.expectEvent(EventType.Scalar);
+      reader.seek(keyStart..);
+      const foundKey = reader.readString(keyEnd - keyStart);
+
+      if foundKey == key then
+        throw new YamlParserError("Field not found: ", key);
+
+      return this.deserialize(reader, t);
+    }
+
+    // -------- sequence --------
+
     proc startTuple(reader: _readType, size: int) throws {
       this._startSequence(reader);
     }
@@ -274,6 +289,8 @@ module Yaml {
     proc readArrayElement(reader: _readType, type t): t throws {
       return this.deserialize(reader, t);
     }
+
+    // -------- map --------
 
     proc startMap(reader: _readType) throws {
       this._startMapping(reader);
@@ -296,35 +313,23 @@ module Yaml {
     proc _startMapping(reader: _readType): string throws {
       // TODO: expect a scalar event first in case there is a type-tag or anchor
       const typeName = "";
-
       const (startOffset, _) = this.parser.expectEvent(EventType.MappingStart, reader);
-      contextLevel += 1;
-      contextOffset = startOffset;
-
       return typeName;
     }
 
     proc _endMapping(reader: _readType) throws {
       const (_, endOffset) = this.parser.expectEvent(EventType.MappingEnd, reader);
-      contextLevel -= 1;
-      contextOffset = endOffset;
     }
 
     proc _startSequence(reader: _readType) throws {
       // TODO: expect a scalar event first in case there is a type-tag or anchor
       const typeName = "";
-
       const (startOffset, _) = this.parser.expectEvent(EventType.SequenceStart, reader);
-      contextLevel += 1;
-      contextOffset = startOffset;
-
       return typeName;
     }
 
     proc _endSequence(reader: _readType) throws {
       const (_, endOffset) = this.parser.expectEvent(EventType.SequenceEnd, reader);
-      contextLevel -= 1;
-      contextOffset = endOffset;
     }
 
     proc _checkNativeTypeMatch(typeTag: string, type t) throws {
@@ -342,12 +347,6 @@ module Yaml {
           throw new YamlTypeMismatchError(t, typeTag);
       }
     }
-  }
-
-  // testing
-  proc main() {
-    var s = try! new yamlSerializer();
-    var d = try! new yamlDeserializer();
   }
 
   private module SerializerHelp {
@@ -727,10 +726,14 @@ module Yaml {
 
     // a chapel wrapper around the libyaml parser
     class LibYamlParser {
+      @chpldoc.nodoc
       var parser: yaml_parser_t;
+      @chpldoc.nodoc
       var event: yaml_event_t;
 
+      @chpldoc.nodoc
       var f: c_FILE;
+      @chpldoc.nodoc
       var fileIsInit = false;
     }
 
