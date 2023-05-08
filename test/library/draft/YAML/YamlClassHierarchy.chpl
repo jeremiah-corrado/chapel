@@ -374,6 +374,10 @@ class YamlAlias: YamlValue {
     return YamlValueType.Alias;
   }
 
+  override proc asString(): string {
+    return this.alias;
+  }
+
   @chpldoc.nodoc
   override proc writeThis(fw) throws {
     super.writeThis(fw);

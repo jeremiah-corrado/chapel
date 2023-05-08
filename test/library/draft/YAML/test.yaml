@@ -11,9 +11,9 @@ nested_map: &with_an_alias_tag
   multi_line_string: |
     the newlines in this string will
     be retained when parsed ...
-  other_stuff:
-    quoted_string: "abcdef"
-    ref_to_alias: *with_an_alias_tag
+other_stuff:
+  quoted_string: "abcdef"
+  ref_to_alias: *with_an_alias_tag
 --- # document 2
 other_list: [1.1, 2.2, 3.3, 4.4]
 other_multi_line: >

@@ -2947,14 +2947,13 @@ operator fileWriter.=(ref lhs:fileWriter, rhs:fileWriter) {
 }
 //private extern proc qio_channel_get_file_ptr(ch:qio_channel_ptr_t, ref file_out: qio_file_ptr_t);
 @chpldoc.nodoc
-proc fileReader.tryGetFilePath(): string {
+proc fileReader._tryGetFilePath(): string throws {
   var f: qio_file_ptr_t;
   qio_channel_get_file_ptr(this._channel_internal, f);
 
   var ret: string;
   var err:errorCode = 0;
   on this._home {
-    try this.checkAssumingLocal();
     var tmp:c_string;
     err = qio_file_path(f, tmp);
     if !err {
@@ -2963,7 +2962,7 @@ proc fileReader.tryGetFilePath(): string {
     }
     chpl_free_c_string(tmp);
   }
-  if err then try ioerror(err, "in fileReader.tryGetFilePath");
+  if err then try ioerror(err, "in fileReader._tryGetFilePath");
   return ret;
 }
 
