@@ -763,6 +763,10 @@ void _qio_channel_set_error_unlocked(qio_channel_t* ch, qioerr err) {
   if( err ) ch->error = err;
 }
 
+static inline
+void qio_channel_get_file_ptr(qio_channel_t* ch, qio_file_t** file_out) {
+  *file_out = ch->file;
+}
 
 static inline
 qioerr qio_channel_error(qio_channel_t* ch) {

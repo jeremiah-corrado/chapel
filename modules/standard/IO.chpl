@@ -647,6 +647,8 @@ param iobig = iokind.big;
 /* A synonym for ``iokind.little``; see :type:`iokind` */
 param iolittle = iokind.little;
 
+
+param chpl_useIOSerializers = true;
 /*
 
 The :type:`ioendian` type is an enum. When used as an argument to the
@@ -1208,6 +1210,8 @@ private extern proc qio_file_init(ref file_out:qio_file_ptr_t, fp: c_FILE, fd:c_
 private extern proc qio_file_open_access(ref file_out:qio_file_ptr_t, path:c_string, access:c_string, iohints:c_int, const ref style:iostyleInternal):errorCode;
 private extern proc qio_file_open_tmp(ref file_out:qio_file_ptr_t, iohints:c_int, const ref style:iostyleInternal):errorCode;
 private extern proc qio_file_open_mem(ref file_out:qio_file_ptr_t, buf:qbuffer_ptr_t, const ref style:iostyleInternal):errorCode;
+
+private extern proc qio_channel_get_file_ptr(ch:qio_channel_ptr_t, ref file_out: qio_file_ptr_t):void;
 
 pragma "no doc"
 extern proc qio_file_close(f:qio_file_ptr_t):errorCode;
@@ -2940,6 +2944,27 @@ operator fileWriter.=(ref lhs:fileWriter, rhs:fileWriter) {
   lhs._home = rhs._home;
   lhs._channel_internal = rhs._channel_internal;
   lhs._serializer = new unmanaged _serializeWrapper(rhs.serializerType, rhs._serializer!.member);
+}
+//private extern proc qio_channel_get_file_ptr(ch:qio_channel_ptr_t, ref file_out: qio_file_ptr_t);
+@chpldoc.nodoc
+proc fileReader.tryGetFilePath(): string {
+  var f: qio_file_ptr_t;
+  qio_channel_get_file_ptr(this._channel_internal, f);
+
+  var ret: string;
+  var err:errorCode = 0;
+  on this._home {
+    try this.checkAssumingLocal();
+    var tmp:c_string;
+    err = qio_file_path(f, tmp);
+    if !err {
+      ret = createStringWithNewBuffer(tmp,
+                                      policy=decodePolicy.escape);
+    }
+    chpl_free_c_string(tmp);
+  }
+  if err then try ioerror(err, "in fileReader.tryGetFilePath");
+  return ret;
 }
 
 pragma "no doc"

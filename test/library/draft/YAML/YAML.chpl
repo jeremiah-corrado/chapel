@@ -6,11 +6,16 @@ module Yaml {
                 this.SerializerHelp.ScalarStyle;
 
   private import this.SerializerHelp.LibYamlEmitter,
-                 this.DeserializerHelp.libYamlParser;
+                 this.DeserializerHelp.LibYamlParser;
 
   private import this.SerializerHelp.YamlEmitterError,
                  this.DeserializerHelp.YamlParserError,
+                 this.DeserializerHelp.YamlTypeMismatchError,
+                 this.DeserializerHelp.YamlEventMismatchError,
                  this.DeserializerHelp.EventType;
+
+  type _writeType = fileWriter(serializerType=yamlSerializer, ?);
+  type _readType = fileReader(deserializerType=yamlDeserializer, ?);
 
   record yamlSerializer {
     var emitter: unmanaged LibYamlEmitter;
@@ -21,8 +26,10 @@ module Yaml {
       seqStyle: SequenceStyle = SequenceStyle.Any,
       mapStyle: MappingStyle = MappingStyle.Any,
       scalarStyle: ScalarStyle = ScalarStyle.Any
-    ) {
+    ) throws {
       this.emitter = new unmanaged LibYamlEmitter(seqStyle, mapStyle, scalarStyle);
+      this.complete();
+      this.emitter.prepSerialization();
     }
 
     proc init(
@@ -39,7 +46,7 @@ module Yaml {
       delete this.emitter;
     }
 
-    proc serialize(writer: fileWriter, const val: ?t): void throws {
+    proc serializeValue(writer: _writeType, const val: ?t) throws {
       var startOffset, endOffset = 0;
       import Reflection.canResolve;
 
@@ -62,33 +69,46 @@ module Yaml {
       }
     }
 
-    proc startType(writer: fileWriter, type t, size: int = -1) throws {
-      const startOffset = this.emitter.beginMapping();
-      if contextLevel == 0 then this.contextStartOffset = startOffset;
-      contextLevel += 1;
+    // -------- composite --------
+
+    proc startClass(writer: _writeType, type t, size: int) throws {
+      this._startMapping(writer, t, size);
     }
 
-    proc endType(writer: fileWriter, type t) throws {
-      const endOffset = this.emitter.endMapping();
-      contextLevel -= 1;
-      if contextLevel == 0 {
-        writer.writeBytes(this.emitter.extractBytes(this.contextStartOffset..endOffset));
-        this.contextStartOffset = endOffset;
-      }
+    proc endClass(writer: _writeType) throws {
+      this._endMapping(writer);
     }
 
-    proc serializeField(writer: fileWriter, name: string, const val: ?t) throws {
-      this.emitter.emitScalar(name);
-      this.serialize(writer, val);
+    proc startRecord(writer: _writeType, type t, size: int) throws {
+      this._startMapping(writer, t, size);
     }
 
-    proc startArray(writer: fileWriter, size: uint = 0) throws {
+    proc endRecord(writer: _writeType) throws {
+      this._endMapping(writer);
+    }
+
+    proc serializeField(writer: _writeType, key: string, const val: ?t) throws {
+      this.emitter.emitScalar(key);
+      this.serializeValue(writer, val);
+    }
+
+    // -------- list --------
+
+    proc startTuple(writer: _writeType, type t, size: int) throws {
+      this._startSequence(writer, t, size);
+    }
+
+    proc endTuple(writer: _writeType) throws {
+      this._endSequence(writer);
+    }
+
+    proc startArray(writer: _writeType, size: uint = 0) throws {
       const startOffset = this.emitter.beginSequence();
       if contextLevel == 0 then this.contextStartOffset = startOffset;
       contextLevel += 1;
     }
 
-    proc endArray(writer: fileWriter) throws {
+    proc endArray(writer: _writeType) throws {
       const endOffset = this.emitter.endSequence();
       contextLevel -= 1;
       if contextLevel == 0 {
@@ -97,20 +117,230 @@ module Yaml {
       }
     }
 
-    proc serializeElement(writer: fileWriter, const idx: ?, const elt: ?t) throws {
+    proc writeArrayElement(writer: _writeType, const elt: ?t) throws {
       this.serialize(writer, elt);
+    }
+
+    // -------- map --------
+
+    proc startMap(writer: _writeType, size: uint = 0) throws {
+      this._startMapping(writer, nothing, size);
+    }
+
+    proc endMap(writer: _writeType) throws {
+      this._endMapping(writer);
+    }
+
+    proc writeKey(writer: _writeType, const key: ?t) throws {
+      this.serialize(writer, key);
+    }
+
+    proc writeValue(writer: _writeType, const val: ?t) throws {
+      this.serialize(writer, val);
+    }
+
+    // -------- helpers --------
+
+    proc _startMapping(writer: _writeType, type t, size: int) throws {
+      const startOffset = this.emitter.beginMapping();
+      if contextLevel == 0 then this.contextStartOffset = startOffset;
+      contextLevel += 1;
+    }
+
+    proc _endMapping(writer: _writeType) throws {
+      const endOffset = this.emitter.endMapping();
+      contextLevel -= 1;
+      if contextLevel == 0 {
+        writer.writeBytes(this.emitter.extractBytes(this.contextStartOffset..endOffset));
+        this.contextStartOffset = endOffset;
+      }
+    }
+
+    proc _startSequence(writer: _writeType, type t, size: int) throws {
+      const startOffset = this.emitter.beginSequence();
+      if contextLevel == 0 then this.contextStartOffset = startOffset;
+      contextLevel += 1;
+    }
+
+    proc _endSequence(writer: _writeType) throws {
+      const endOffset = this.emitter.endSequence();
+      contextLevel -= 1;
+      if contextLevel == 0 {
+        writer.writeBytes(this.emitter.extractBytes(this.contextStartOffset..endOffset));
+        this.contextStartOffset = endOffset;
+      }
     }
   }
 
   record yamlDeserializer {
-    var parser: libYamlParser;
+    var parser: unmanaged LibYamlParser;
+    var strictTypeParsing: bool = false;
+    var contextLevel: int = 0;
+    var contextOffset: int = 0;
 
-    proc init() {
-      this.parser = new libYamlParser();
+    proc init(respectTypeAnnotations: bool = false) throws {
+      this.parser = new unmanaged LibYamlParser();
+      this.strictTypeParsing = respectTypeAnnotations;
+
+      // // this would be much better to do here if we could get the filepath upon initialization
+      // this.complete()
+      // this.parser.prepDeserialization(filePath = ????)
     }
 
-    proc deserialize(reader: fileReader, type readType) : readType throws {
+    proc init(other: yamlDeserializer) {
+      this.parser = other.parser;
+      this.strictTypeParsing = other.strictTypeParsing;
+      this.contextLevel = other.contextLevel + 1;
+      this.contextOffset = 0;
+    }
 
+    proc deinit() {
+      delete this.parser;
+    }
+
+    proc deserialize(reader: _readType, type t) : t throws {
+      if _isIoPrimitiveType(t) {
+        const (startOffset, endOffset) = this.parser.expectEvent(EventType.Scalar);
+        reader.seek(startOffset..);
+        const valString = reader.readString(endOffset - startOffset);
+
+        if valString.startsWith("!!") { // yaml native type is specified...
+          const (typeTag, _, value) = valString.partition(" ");
+          _checkNativeTypeMatch(typeTag, t);
+          return value: t;
+        } else if valString.startsWith("!") { // custom type is specified
+          const (typeTag, _, value) = valString.partition(" ");
+          throw new YamlParserError("cannot parser a ", typeTag, " value as a ", t:string);
+        } else { // no type specified
+          return valString: t;
+        }
+      } else if canResolveTypeMethod(t, "deserializeFrom", reader, this) ||
+                isArrayType(t) {
+        var alias = reader.withDeserializer(new yamlDeserializer(this));
+        return t.deserializeFrom(reader=alias, deserializer=alias.deserializer);
+      } else {
+        var alias = reader.withDeserializer(new yamlDeserializer(this));
+        return new t(reader=alias, deserializer=alias.deserializer);
+      }
+    }
+
+    proc deserializeField(reader: _readType, key: string, type t): t throws {
+      const (keyStart, keyEnd) = this.parser.expectEvent(EventType.Scalar);
+      reader.seek(keyStart..);
+      const foundKey = reader.readString(keyEnd - keyStart);
+
+      if foundKey == key then
+        throw new YamlParserError("Field not found: ", key);
+
+      return this.deserialize(reader, t);
+    }
+
+    proc startClass(reader: _readType, name: string, size: int) throws {
+      const typeName = this._startMapping(reader);
+      if name != typeName && strictTypeParsing
+        then throw new YamlTypeMismatchError(name, typeName);
+    }
+
+    proc endClass(reader: _readType) throws {
+      this._endMapping(reader);
+    }
+
+    proc startRecord(reader: _readType, name: string, size: int) throws {
+      const typeName = this._startMapping(reader);
+      if name != typeName && strictTypeParsing
+        then throw new YamlTypeMismatchError(name, typeName);
+    }
+
+    proc endRecord(reader: _readType) throws {
+      this._endMapping(reader);
+    }
+
+    proc startTuple(reader: _readType, size: int) throws {
+      this._startSequence(reader);
+    }
+
+    proc endTuple(reader: _readType) throws {
+      this._endSequence(reader);
+    }
+
+    proc startArray(reader: _readType) throws {
+      this._startSequence(reader);
+    }
+
+    proc endArray(reader: _readType) throws {
+      this._endSequence(reader);
+    }
+
+    proc readArrayElement(reader: _readType, type t): t throws {
+      return this.deserialize(reader, t);
+    }
+
+    proc startMap(reader: _readType) throws {
+      this._startMapping(reader);
+    }
+
+    proc endMap(reader: _readType) throws {
+      this._endMapping(reader);
+    }
+
+    proc readKey(reader: _readType, type t) throws {
+      return this.deserialize(reader, t);
+    }
+
+    proc readValue(reader: _readType, type t) throws {
+      return this.deserialize(reader, t);
+    }
+
+    // ---------- helpers ----------
+
+    proc _startMapping(reader: _readType): string throws {
+      // TODO: expect a scalar event first in case there is a type-tag or anchor
+      const typeName = "";
+
+      const (startOffset, _) = this.parser.expectEvent(EventType.MappingStart, reader);
+      contextLevel += 1;
+      contextOffset = startOffset;
+
+      return typeName;
+    }
+
+    proc _endMapping(reader: _readType) throws {
+      const (_, endOffset) = this.parser.expectEvent(EventType.MappingEnd, reader);
+      contextLevel -= 1;
+      contextOffset = endOffset;
+    }
+
+    proc _startSequence(reader: _readType) throws {
+      // TODO: expect a scalar event first in case there is a type-tag or anchor
+      const typeName = "";
+
+      const (startOffset, _) = this.parser.expectEvent(EventType.SequenceStart, reader);
+      contextLevel += 1;
+      contextOffset = startOffset;
+
+      return typeName;
+    }
+
+    proc _endSequence(reader: _readType) throws {
+      const (_, endOffset) = this.parser.expectEvent(EventType.SequenceEnd, reader);
+      contextLevel -= 1;
+      contextOffset = endOffset;
+    }
+
+    proc _checkNativeTypeMatch(typeTag: string, type t) throws {
+      if this.strictTypeParsing {
+        var matches = false;
+        select typeTag {
+          when "!!float" do matches = t == real;
+          when "!!int" do matches = t == int;
+          when "!!str" do matches = t == string || t == bytes;
+          when "!!bool" do matches = t == bool;
+          when "!!binary" do matches = t == bytes; //???
+          otherwise matches = false;
+        }
+        if !matches then
+          throw new YamlTypeMismatchError(t, typeTag);
+      }
     }
   }
 
@@ -124,6 +354,7 @@ module Yaml {
     private use CTypes;
     require "yaml.h", "-lyaml";
 
+    // a chapel wrapper around the libyaml emitter
     class LibYamlEmitter {
       var seqStyle: SequenceStyle;
       var mapStyle: MappingStyle;
@@ -157,9 +388,9 @@ module Yaml {
     }
 
     proc LibYamlEmitter.prepSerialization() throws {
-      this.file = opentmp();
-      if this.file == nil then
-        throw new YamlEmitterError("Failed to open temporary file");
+      this.file = tmpfile();
+      // if this.file == nil then
+      //   throw new YamlEmitterError("Failed to open temporary file");
 
       if !yaml_emitter_initialize(this.emitterPtr)
         then throw new YamlEmitterError("Failed to initialize emitter");
@@ -494,17 +725,20 @@ module Yaml {
     private use CTypes;
     require "yaml.h", "-lyaml";
 
-    record libYamlParser {
+    // a chapel wrapper around the libyaml parser
+    class LibYamlParser {
       var parser: yaml_parser_t;
       var event: yaml_event_t;
-      var file: c_ptr(c_FILE) = c_nil;
+
+      var f: c_FILE;
+      var fileIsInit = false;
     }
 
     // ----------------------------------------
     // initialization
     // ----------------------------------------
 
-    proc libYamlParser.init() {
+    proc LibYamlParser.init() {
       var p: yaml_parser_t;
       var e: yaml_event_t;
       c_memset(c_ptrTo(p):c_void_ptr, 0, c_sizeof(yaml_parser_t));
@@ -513,35 +747,20 @@ module Yaml {
       this.event = e;
     }
 
-    // give the parser a file to read from
-    proc libYamlParser.attachFile(path: string) throws {
-      var f = fopen(path, c"r");
-      if f == nil then
-        throw new YamlParserError("Failed to open file for reading");
-      this.file = c_ptrTo(f);
-      this._parserInit();
-      yaml_parser_set_input_file(this.parserPtr, f);
-    }
+    proc LibYamlParser.prepDeserialization(filePath: string) throws {
+      var f = fopen(filePath, c"r");
+      // TODO: error handling for file not found
+      this.file = f;
 
-    // give the parser a file to read from, starting from some offset
-    proc libYamlParser.attachFileAt(path: string, offset: int) throws {
-      var f = fopen(path, c"r");
-      if f == nil then
-        throw new YamlParserError("Failed to open file for reading");
-      fseek(f, offset, SEEK_SET);
-      this.file = c_ptrTo(f);
-      this._parserInit();
-      yaml_parser_set_input_file(this.emitterPtr, f);
-    }
-
-    proc libYamlParser._parserInit() throws {
       if !yaml_parser_initialize(this.parserPtr) then
         throw new YamlParserError("Failed to initialize YAML parser");
+
+      yaml_parser_set_input_file(this.parserPtr, this.f);
+      this.fileIsInit = true;
     }
 
-    proc libYamlParser.deinit() {
-      if this.file != nil then
-        fclose(this.file.deref());
+    proc LibYamlParser.deinit() {
+      if fileIsInit then fclose(this.f);
       yaml_parser_delete(this.parserPtr);
       yaml_event_delete(this.eventPtr);
     }
@@ -550,7 +769,13 @@ module Yaml {
     // parsing
     // ----------------------------------------
 
-    proc libYamlParser.parseNextEvent(): (EventType, int, int) throws {
+    proc LibYamlParser._parseNextEvent(fr): (EventType, int, int) throws {
+      // initialize the parser if not already initialized
+      if !fileIsInit {
+        const p = fr.tryGetFilePath();
+        this.prepDeserialization(p);
+      }
+
       if !yaml_parser_parse(this.parserPtr, this.eventPtr) then
         throw new YamlParserError("Failed to parse YAML event");
 
@@ -561,15 +786,22 @@ module Yaml {
       );
     }
 
+    proc LibYamlParser.expectEvent(et: EventType, fr): 2*int throws {
+      var (t, s, e) = this._parseNextEvent(fr);
+      if t != et then
+        throw new YamlEventMismatchError(et, t);
+      return (s, e);
+    }
+
     // ----------------------------------------
     // helpers
     // ----------------------------------------
 
-    proc libYamlParser.parserPtr: c_ptr(yaml_parser_t) {
+    proc LibYamlParser.parserPtr: c_ptr(yaml_parser_t) {
       return c_ptrTo(this.parser);
     }
 
-    proc libYamlParser.eventPtr: c_ptr(yaml_event_t) {
+    proc LibYamlParser.eventPtr: c_ptr(yaml_event_t) {
       return c_ptrTo(this.event);
     }
 
@@ -657,6 +889,18 @@ module Yaml {
 
     proc YamlParserError.init(msg: string) {
       super.init(msg);
+    }
+
+    class YamlEventMismatchError: YamlParserError {}
+
+    proc YamlEventMismatchError.init(expected: EventType, actual: EventType) {
+      super.init("Expected event type " + expected + ", got " + actual);
+    }
+
+    class YamlTypeMismatchError: YamlParserError {}
+
+    proc YamlTypeMismatchError.init(expected, actual: string) {
+      super.init("Expected type " + expected:string + ", got " + actual);
     }
   }
 }
