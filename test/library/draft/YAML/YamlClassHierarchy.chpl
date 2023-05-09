@@ -374,7 +374,7 @@ class YamlAlias: YamlValue {
     return YamlValueType.Alias;
   }
 
-  override proc asString(): string {
+  override proc asString(strict: bool = false): string throws {
     return this.alias;
   }
 

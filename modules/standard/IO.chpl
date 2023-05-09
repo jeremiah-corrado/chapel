@@ -647,8 +647,6 @@ param iobig = iokind.big;
 /* A synonym for ``iokind.little``; see :type:`iokind` */
 param iolittle = iokind.little;
 
-
-param chpl_useIOSerializers = true;
 /*
 
 The :type:`ioendian` type is an enum. When used as an argument to the

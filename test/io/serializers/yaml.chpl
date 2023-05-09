@@ -68,7 +68,7 @@ module Yaml {
       } else {
         if isClassType(t) {
           if val == nil {
-            (startOffset, endOffset) = this.emitter.emitScalar("~");
+            (startOffset, endOffset) = this.emitter.emitScalar(b"~");
           } else {
             val!.serialize(writer, new yamlSerializer(this.emitter, this.contextLevel + 1));
           }
@@ -85,7 +85,7 @@ module Yaml {
 
     // -------- composite --------
 
-    proc startClass(writer: _writeType, type t, size: int) throws {
+    proc startClass(writer: _writeType, name: string, size: int) throws {
       this._startMapping(writer);
     }
 
@@ -93,7 +93,7 @@ module Yaml {
       this._endMapping(writer);
     }
 
-    proc startRecord(writer: _writeType, type t, size: int) throws {
+    proc startRecord(writer: _writeType, name: string, size: int) throws {
       this._startMapping(writer);
     }
 
@@ -102,21 +102,21 @@ module Yaml {
     }
 
     proc serializeField(writer: _writeType, key: string, const val: ?t) throws {
-      this.emitter.emitScalar(key);
+      this.emitter.emitScalar(key:bytes);
       this.serializeValue(writer, val);
     }
 
     // -------- list --------
 
-    proc startTuple(writer: _writeType, type t, size: int) throws {
-      this._startSequence(writer, t, size);
+    proc startTuple(writer: _writeType, size: int) throws {
+      this._startSequence(writer, size);
     }
 
     proc endTuple(writer: _writeType) throws {
       this._endSequence(writer);
     }
 
-    proc startArray(writer: _writeType, size: uint = 0) throws {
+    proc startArray(writer: _writeType, numElements: uint = 0) throws {
       const startOffset = this.emitter.beginSequence();
       if contextLevel == 0 then this.contextStartOffset = startOffset;
       contextLevel += 1;
@@ -129,6 +129,11 @@ module Yaml {
         writer.writeBinary(this.emitter.extractBytes(this.contextStartOffset..endOffset));
         this.contextStartOffset = endOffset;
       }
+    }
+
+    proc startArrayDim(w: _writeType, len: uint) throws {
+    }
+    proc endArrayDim(w: _writeType) throws {
     }
 
     proc writeArrayElement(writer: _writeType, const elt: ?t) throws {
@@ -170,7 +175,7 @@ module Yaml {
       }
     }
 
-    proc _startSequence(writer: _writeType, type t, size: int) throws {
+    proc _startSequence(writer: _writeType, size: int) throws {
       const startOffset = this.emitter.beginSequence();
       if contextLevel == 0 then this.contextStartOffset = startOffset;
       contextLevel += 1;
@@ -259,7 +264,7 @@ module Yaml {
     }
 
     proc deserializeField(reader: _readType, key: string, type t): t throws {
-      const (keyStart, keyEnd) = this.parser.expectEvent(EventType.Scalar);
+      const (keyStart, keyEnd) = this.parser.expectEvent(EventType.Scalar, reader);
       reader.seek((keyStart:int)..);
       const foundKey = reader.readString((keyEnd - keyStart):int);
 
@@ -427,6 +432,11 @@ module Yaml {
       yaml_event_delete(c_ptrTo(this.event));
     }
 
+    // this is weird
+    proc LibYamlEmitter.serialize(fw, serializer) throws {
+      fw.write("---LimYamlEmitter---");
+    }
+
     // ----------------------------------------
     // serialization
     // ----------------------------------------
@@ -541,14 +551,21 @@ module Yaml {
     // ----------------------------------------
 
     proc LibYamlEmitter.emitEvent(param errorMsg: string): 2*uint throws {
+      const start_pos = ftell(this.file);
+
       if !yaml_emitter_emit(c_ptrTo(this.emitter), c_ptrTo(this.event))
         then throw new YamlEmitterError(errorMsg);
 
-      if YamlVerbose then writeln("Emitting event over: ", this.event.start_mark.idx, " to ", this.event.end_mark.idx);
+      // if YamlVerbose then writeln("Emitting event over: ", this.event.start_mark.idx, " to ", this.event.end_mark.idx);
       // writeln("start column: ", this.event.start_mark.column, " end column: ", this.event.end_mark.column);
       // writeln("start line: ", this.event.start_mark.line, " end line: ", this.event.end_mark.line);
 
-      return (this.event.start_mark.idx, this.event.end_mark.idx);
+      const end_pos = ftell(this.file);
+      writeln("emitting event over: ", start_pos, " to ", end_pos);
+
+      return (start_pos, end_pos);
+
+      // return (this.event.start_mark.idx, this.event.end_mark.idx);
     }
 
     proc LibYamlEmitter.seqStyleC: c_int {
@@ -684,6 +701,7 @@ module Yaml {
     private extern proc fseek(file: c_FILE, offset: c_long, origin: c_int): c_int;
     private extern proc tmpfile(): c_FILE;
     private extern proc fread(ptr: c_ptr(c_uchar), size: c_size_t, nmemb: c_size_t, stream: c_FILE): c_size_t;
+    private extern proc ftell(stream: c_FILE): c_long;
     extern const SEEK_SET: c_int;
 
     // ----------------------------------------
@@ -789,6 +807,10 @@ module Yaml {
       if fileIsInit then fclose(this.f);
       yaml_parser_delete(c_ptrTo(this.parser));
       yaml_event_delete(c_ptrTo(this.event));
+    }
+
+    proc LibYamlParser.serialize(fw, serializer) throws {
+      fw.write("---LibYamlParser---");
     }
 
     // ----------------------------------------
@@ -915,6 +937,10 @@ module Yaml {
 
     proc YamlTypeMismatchError.init(type expected, actual: string) {
       super.init("Expected type " + expected:string + ", got " + actual);
+    }
+
+    proc YamlTypeMismatchError.init(expected: string, actual: string) {
+      super.init("Expected type " + expected + ", got " + actual);
     }
   }
 }

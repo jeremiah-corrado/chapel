@@ -13,6 +13,7 @@ extern record yaml_mark_t {
   var line: c_size_t;
   var column: c_size_t;
 };
+
 extern record yaml_emitter_t {}
 
 extern record yaml_version_directive_t {
