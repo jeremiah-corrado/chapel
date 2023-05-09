@@ -21,7 +21,7 @@ module Yaml {
 
   record yamlSerializer {
     @chpldoc.nodoc
-    var emitter: unmanaged LibYamlEmitter;
+    var emitter: shared LibYamlEmitter;
     @chpldoc.nodoc
     var contextLevel: uint = 0;
     @chpldoc.nodoc
@@ -32,25 +32,20 @@ module Yaml {
       mapStyle: MappingStyle = MappingStyle.Any,
       scalarStyle: ScalarStyle = ScalarStyle.Any
     ) {
-      this.emitter = new unmanaged LibYamlEmitter(seqStyle, mapStyle, scalarStyle);
+      this.emitter = new shared LibYamlEmitter(seqStyle, mapStyle, scalarStyle);
       this.complete();
       try! this.emitter.prepSerialization();
     }
 
     @chpldoc.nodoc
     proc init(
-      emitter: unmanaged LibYamlEmitter,
+      emitter: shared LibYamlEmitter,
       contextLevel,
       contextStartOffset = 0
     ) {
       this.emitter = emitter;
       this.contextLevel = contextLevel;
       this.contextStartOffset = contextStartOffset;
-    }
-
-    @chpldoc.nodoc
-    proc deinit() {
-      delete this.emitter;
     }
 
     proc serializeValue(writer: _writeType, const val: ?t) throws {
@@ -192,11 +187,11 @@ module Yaml {
   }
 
   record yamlDeserializer {
-    var parser: unmanaged LibYamlParser;
+    var parser: shared LibYamlParser;
     var strictTypeParsing: bool = false;
 
     proc init(respectTypeAnnotations: bool = false) {
-      this.parser = new unmanaged LibYamlParser();
+      this.parser = new shared LibYamlParser();
       this.strictTypeParsing = respectTypeAnnotations;
 
       // // this would be much better to do here if we could get the filepath upon initialization
@@ -208,11 +203,6 @@ module Yaml {
     proc init(other: yamlDeserializer) {
       this.parser = other.parser;
       this.strictTypeParsing = other.strictTypeParsing;
-    }
-
-    @chpldoc.nodoc
-    proc deinit() {
-      delete this.parser;
     }
 
     proc deserialize(reader: _readType, type t) : t throws {
