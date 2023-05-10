@@ -543,12 +543,19 @@ module Yaml {
     proc LibYamlEmitter.emitEvent(param errorMsg: string): 2*uint throws {
       const start_pos = ftell(this.file);
 
-      if !yaml_emitter_emit(c_ptrTo(this.emitter), c_ptrTo(this.event))
-        then throw new YamlEmitterError(errorMsg);
-
-      // if YamlVerbose then writeln("Emitting event over: ", this.event.start_mark.idx, " to ", this.event.end_mark.idx);
-      // writeln("start column: ", this.event.start_mark.column, " end column: ", this.event.end_mark.column);
-      // writeln("start line: ", this.event.start_mark.line, " end line: ", this.event.end_mark.line);
+      if !yaml_emitter_emit(c_ptrTo(this.emitter), c_ptrTo(this.event)) {
+        select this.emitter.error {
+          when YAML_MEMORY_ERROR do
+            writef("Memory error: Not enough memory for emitting");
+          when YAML_WRITER_ERROR do
+            writef("Writer error: %s\n", this.emitter.problem.deref());
+          when YAML_EMITTER_ERROR do
+            writef("Emitter error: %s\n", this.emitter.problem.deref());
+          otherwise do
+            writeln("Internal error");
+        }
+        throw new YamlEmitterError(errorMsg);
+      }
 
       const end_pos = ftell(this.file);
       writeln("emitting event over: ", start_pos, " to ", end_pos);
@@ -593,7 +600,10 @@ module Yaml {
     // ----------------------------------------
 
     // relevant types
-    extern record yaml_emitter_t { }
+    extern record yaml_emitter_t {
+      var error: c_int;
+      var problem: c_ptrConst(c_uchar);
+    }
     extern record yaml_event_t {
       var start_mark: yaml_mark_t;
       var end_mark: yaml_mark_t;
@@ -632,6 +642,10 @@ module Yaml {
     extern const YAML_DOUBLE_QUOTED_SCALAR_STYLE: c_int;
     extern const YAML_LITERAL_SCALAR_STYLE: c_int;
     extern const YAML_FOLDED_SCALAR_STYLE: c_int;
+
+    extern const YAML_MEMORY_ERROR: c_int;
+    extern const YAML_WRITER_ERROR: c_int;
+    extern const YAML_EMITTER_ERROR: c_int;
 
     // emitter API
     private extern proc yaml_emitter_initialize(emitter: c_ptr(yaml_emitter_t)): c_int;
