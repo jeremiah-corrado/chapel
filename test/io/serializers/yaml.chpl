@@ -49,6 +49,8 @@ module Yaml {
     }
 
     proc serializeValue(writer: _writeType, const val: ?t) throws {
+      if YamlVerbose then writeln("serializeValue: ", val);
+
       var startOffset, endOffset: uint(64) = 0;
       // import Reflection.canResolve;
 
@@ -58,12 +60,13 @@ module Yaml {
       //   (startOffset, endOffset) = this.emitter.emit(valBytes);
 
       if _isIoPrimitiveType(t) || isRangeType(t) {
-        const valBytes = "%t".format(val): bytes;
+        var valBytes = "%t".format(val): bytes;
         (startOffset, endOffset) = this.emitter.emitScalar(valBytes);
       } else {
         if isClassType(t) {
           if val == nil {
-            (startOffset, endOffset) = this.emitter.emitScalar(b"~");
+            var nullSymbol = b"~";
+            (startOffset, endOffset) = this.emitter.emitScalar(nullSymbol);
           } else {
             val!.serialize(writer, new yamlSerializer(this.emitter, this.contextLevel + 1));
           }
@@ -89,6 +92,7 @@ module Yaml {
     }
 
     proc startRecord(writer: _writeType, name: string, size: int) throws {
+      if YamlVerbose then writeln("starting record: ", name, " size: ", size);
       this._startMapping(writer);
     }
 
@@ -97,7 +101,9 @@ module Yaml {
     }
 
     proc serializeField(writer: _writeType, key: string, const val: ?t) throws {
-      this.emitter.emitScalar(key:bytes);
+      if YamlVerbose then writeln("serializing field: ", key, " = ", val);
+      var kb = key: bytes;
+      this.emitter.emitScalar(kb);
       this.serializeValue(writer, val);
     }
 
@@ -385,9 +391,12 @@ module Yaml {
     }
 
     proc LibYamlEmitter.prepSerialization() throws {
-      this.file = tmpfile();
+      // this.file = tmpfile();
+      this.file = fopen(c"./asdf.yaml", c"w");
       // if this.file == nil then
       //   throw new YamlEmitterError("Failed to open temporary file");
+
+      if YamlVerbose then writeln("Initializing emitter");
 
       if !yaml_emitter_initialize(c_ptrTo(this.emitter))
         then throw new YamlEmitterError("Failed to initialize emitter");
@@ -422,7 +431,6 @@ module Yaml {
       yaml_event_delete(c_ptrTo(this.event));
     }
 
-    // this is weird
     proc LibYamlEmitter.serialize(fw, serializer) throws {
       fw.write("---LimYamlEmitter---");
     }
@@ -497,7 +505,7 @@ module Yaml {
       return this.emitEvent(errorMsg = "Failed to emit mapping end event")[1];
     }
 
-    proc LibYamlEmitter.emitScalar(value: bytes, tag: bytes = b""): 2*uint throws {
+    proc LibYamlEmitter.emitScalar(ref value: bytes, tag: bytes = b""): 2*uint throws {
       if YamlVerbose then writeln("Emitting scalar: ", value);
 
       var v = value, t = tag;
@@ -523,6 +531,8 @@ module Yaml {
     }
 
     proc LibYamlEmitter.startDocument(implicitStart: bool = true): uint throws {
+      if YamlVerbose then writeln("Starting document");
+
       if !yaml_document_start_event_initialize(c_ptrTo(this.event), nil, nil, nil, implicitStart:c_int)
         then throw new YamlEmitterError("Failed to initialize document start event");
 
@@ -530,6 +540,8 @@ module Yaml {
     }
 
     proc LibYamlEmitter.endDocument(implicitEnd: bool = true): uint throws {
+      if YamlVerbose then writeln("Ending document");
+
       if !yaml_document_end_event_initialize(c_ptrTo(this.event), implicitEnd:c_int)
         then throw new YamlEmitterError("Failed to initialize document end event");
 
@@ -540,7 +552,7 @@ module Yaml {
     // helpers
     // ----------------------------------------
 
-    proc LibYamlEmitter.emitEvent(param errorMsg: string): 2*uint throws {
+    inline proc LibYamlEmitter.emitEvent(param errorMsg: string): 2*uint throws {
       const start_pos = ftell(this.file);
 
       if !yaml_emitter_emit(c_ptrTo(this.emitter), c_ptrTo(this.event)) {
@@ -549,13 +561,16 @@ module Yaml {
             writef("Memory error: Not enough memory for emitting");
           when YAML_WRITER_ERROR do
             writef("Writer error: %s\n", this.emitter.problem.deref());
-          when YAML_EMITTER_ERROR do
+          when YAML_EMITTER_ERROR {
             writef("Emitter error: %s\n", this.emitter.problem.deref());
+          }
           otherwise do
             writeln("Internal error");
         }
         throw new YamlEmitterError(errorMsg);
       }
+
+      fflush(this.file);
 
       const end_pos = ftell(this.file);
       writeln("emitting event over: ", start_pos, " to ", end_pos);
@@ -602,7 +617,7 @@ module Yaml {
     // relevant types
     extern record yaml_emitter_t {
       var error: c_int;
-      var problem: c_ptrConst(c_uchar);
+      var problem: c_ptr(c_uchar);
     }
     extern record yaml_event_t {
       var start_mark: yaml_mark_t;
@@ -706,6 +721,7 @@ module Yaml {
     private extern proc tmpfile(): c_FILE;
     private extern proc fread(ptr: c_ptr(c_uchar), size: c_size_t, nmemb: c_size_t, stream: c_FILE): c_size_t;
     private extern proc ftell(stream: c_FILE): c_long;
+    private extern proc fflush(stream: c_FILE): c_int;
     extern const SEEK_SET: c_int;
 
     // ----------------------------------------

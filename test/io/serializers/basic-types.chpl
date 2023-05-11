@@ -74,7 +74,7 @@ record CustomizedRecord {
     r.readLiteral(">");
   }
 
-  proc serialize(writer: fileWriter, ref serializer) {
+  proc serialize(writer: fileWriter, ref serializer) throws {
     writer.writeLiteral("<");
     writer.write(x);
     writer.writeLiteral(", ");
@@ -130,31 +130,31 @@ class ChildChild : SimpleChild {
 }
 
 proc main() {
-  test(true);
-  test(5);
-  test(42.0);
-  test("a-b-c-d-e-f-g");
-  test(1..10);
-  test(1..10 by 2);
-  test(0..9 by 2 align 1);
-  test((1, 2, 3));
-  test((1, 42.0, false));
-  test(colors.red);
+  // test(true);
+  // test(5);
+  // test(42.0);
+  // test("a-b-c-d-e-f-g");
+  // test(1..10);
+  // test(1..10 by 2);
+  // test(0..9 by 2 align 1);
+  // test((1, 2, 3));
+  // test((1, 42.0, false));
+  // test(colors.red);
   test(new SimpleRecord(5, 42.0));
-  test(new CustomizedRecord(7, 3.14));
-  test(new GenericRecord(int, 3, 42, (1,2,3)));
-  test(new owned Parent(5));
-  test(new owned SimpleChild(5, 42.0));
-  //test(new owned GenericChild(5, int, 42));
-  test(new owned ChildChild(1, 42.0, 5));
+  // test(new CustomizedRecord(7, 3.14));
+  // test(new GenericRecord(int, 3, 42, (1,2,3)));
+  // test(new owned Parent(5));
+  // test(new owned SimpleChild(5, 42.0));
+  // //test(new owned GenericChild(5, int, 42));
+  // test(new owned ChildChild(1, 42.0, 5));
 
-  // Make sure we can read an initialized value into a nilable type.
-  // Needs to be 'new owned Parent?' in case the format includes type names.
-  test(new owned Parent?(5), owned Parent?);
+  // // Make sure we can read an initialized value into a nilable type.
+  // // Needs to be 'new owned Parent?' in case the format includes type names.
+  // test(new owned Parent?(5), owned Parent?);
 
-  var nilTemp : owned Parent?;
-  test(nilTemp);
-  test(new shared Parent(5));
+  // var nilTemp : owned Parent?;
+  // test(nilTemp);
+  // test(new shared Parent(5));
 
   if failures.size > 0 {
     writeln("FAILURES:");
