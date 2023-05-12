@@ -1,5 +1,5 @@
 module Yaml {
-  private use IO;
+  private use IO, List;
 
   config param YamlVerbose = true;
 
@@ -22,10 +22,9 @@ module Yaml {
   record yamlSerializer {
     @chpldoc.nodoc
     var emitter: shared LibYamlEmitter;
+
     @chpldoc.nodoc
-    var contextLevel: uint = 0;
-    @chpldoc.nodoc
-    var contextStartOffset: uint = 0;
+    var context: shared ContextStack;
 
     proc init(
       seqStyle: SequenceStyle = SequenceStyle.Any,
@@ -33,32 +32,21 @@ module Yaml {
       scalarStyle: ScalarStyle = ScalarStyle.Any
     ) {
       this.emitter = new shared LibYamlEmitter(seqStyle, mapStyle, scalarStyle);
+      this.context = new shared ContextStack();
       this.complete();
       try! this.emitter.prepSerialization();
     }
 
     @chpldoc.nodoc
-    proc init(
-      emitter: shared LibYamlEmitter,
-      contextLevel,
-      contextStartOffset = 0
-    ) {
+    proc init(emitter: shared LibYamlEmitter, context: shared ContextStack) {
       this.emitter = emitter;
-      this.contextLevel = contextLevel;
-      this.contextStartOffset = contextStartOffset;
+      this.context = context;
     }
 
     proc serializeValue(writer: _writeType, const val: ?t) throws {
       if YamlVerbose then writeln("serializeValue: ", val);
 
       var startOffset, endOffset: uint(64) = 0;
-      // import Reflection.canResolve;
-
-      // TODO: should use reflection here, but this is not working:
-      // if canResolve(":", val, bytes) {
-      //   const valBytes = val: bytes;
-      //   (startOffset, endOffset) = this.emitter.emit(valBytes);
-
       if _isIoPrimitiveType(t) || isRangeType(t) {
         var valBytes = "%t".format(val): bytes;
         (startOffset, endOffset) = this.emitter.emitScalar(valBytes);
@@ -68,17 +56,15 @@ module Yaml {
             var nullSymbol = b"~";
             (startOffset, endOffset) = this.emitter.emitScalar(nullSymbol);
           } else {
-            val!.serialize(writer, new yamlSerializer(this.emitter, this.contextLevel + 1));
+            val!.serialize(writer, new yamlSerializer(this.emitter, this.context));
           }
         } else {
-          val.serialize(writer, new yamlSerializer(this.emitter, this.contextLevel + 1));
+          val.serialize(writer, new yamlSerializer(this.emitter, this.context));
         }
       }
 
-      if contextLevel == 0 && endOffset > 0 {
-        writer.writeBinary(this.emitter.extractBytes(startOffset..endOffset));
-        this.contextStartOffset = endOffset;
-      }
+      if context.isBase then
+        writer.writeBytes(this.emitter.extractBytes(startOffset..endOffset));
     }
 
     // -------- composite --------
@@ -119,17 +105,11 @@ module Yaml {
 
     proc startArray(writer: _writeType, numElements: uint = 0) throws {
       const startOffset = this.emitter.beginSequence();
-      if contextLevel == 0 then this.contextStartOffset = startOffset;
-      contextLevel += 1;
     }
 
     proc endArray(writer: _writeType) throws {
       const endOffset = this.emitter.endSequence();
-      contextLevel -= 1;
-      if contextLevel == 0 {
-        writer.writeBinary(this.emitter.extractBytes(this.contextStartOffset..endOffset));
-        this.contextStartOffset = endOffset;
-      }
+        writer.writeBytes(this.emitter.extractBytes(0..endOffset));
     }
 
     proc startArrayDim(w: _writeType, len: uint) throws {
@@ -163,34 +143,55 @@ module Yaml {
 
     proc _startMapping(writer: _writeType) throws {
       const startOffset = this.emitter.beginMapping();
-      if contextLevel == 0 then this.contextStartOffset = startOffset;
-      contextLevel += 1;
+      this.context.push(startOffset);
     }
 
     proc _endMapping(writer: _writeType) throws {
       const endOffset = this.emitter.endMapping();
-      contextLevel -= 1;
-      if contextLevel == 0 {
-        writer.writeBinary(this.emitter.extractBytes(this.contextStartOffset..endOffset));
-        this.contextStartOffset = endOffset;
-      }
+      const (isBase, startOffset) = this.context.pop();
+      if isBase then
+        writer.writeBytes(this.emitter.extractBytes(startOffset..<endOffset));
     }
 
     proc _startSequence(writer: _writeType, size: int) throws {
       const startOffset = this.emitter.beginSequence();
-      if contextLevel == 0 then this.contextStartOffset = startOffset;
-      contextLevel += 1;
+      this.context.push(startOffset);
     }
 
     proc _endSequence(writer: _writeType) throws {
       const endOffset = this.emitter.endSequence();
-      contextLevel -= 1;
-      if contextLevel == 0 {
-        writer.writeBinary(this.emitter.extractBytes(this.contextStartOffset..endOffset));
-        this.contextStartOffset = endOffset;
-      }
+      const (isBase, startOffset) = this.context.pop();
+      if isBase then
+        writer.writeBytes(this.emitter.extractBytes(startOffset..<endOffset));
     }
   }
+
+  class ContextStack {
+    var s : list(uint);
+
+    proc init() {
+      this.s = new list(uint);
+    }
+
+    proc push(offset: uint) {
+      this.s.append(offset);
+    }
+
+    proc pop(): (bool, uint) {
+      if this.s.size == 0 {
+        return (false, 0);
+      } else if this.s.size == 1 {
+        return (true, this.s.pop());
+      } else {
+        return (false, this.s.pop());
+      }
+    }
+
+    proc isBase: bool {
+      return this.s.size == 0;
+    }
+  }
+
 
   record yamlDeserializer {
     var parser: shared LibYamlParser;
@@ -390,9 +391,18 @@ module Yaml {
       this.event = event;
     }
 
+    private extern proc fopen(filename: c_string, mode: c_string): c_FILE;
+    private extern proc fclose(file: c_FILE): c_int;
+    private extern proc fseek(file: c_FILE, offset: c_long, origin: c_int): c_int;
+    private extern proc tmpfile(): c_FILE;
+    private extern proc fread(ptr: c_ptr(c_uchar), size: c_size_t, nmemb: c_size_t, stream: c_FILE): c_size_t;
+    private extern proc ftell(stream: c_FILE): c_long;
+    private extern proc fflush(stream: c_FILE): c_int;
+    private extern proc fgets(s: c_ptr(c_uchar), size: c_int, stream: c_FILE): c_ptr(c_uchar);
+    extern const SEEK_SET: c_int;
+
     proc LibYamlEmitter.prepSerialization() throws {
-      // this.file = tmpfile();
-      this.file = fopen(c"./asdf.yaml", c"w");
+      this.file = tmpfile();
       // if this.file == nil then
       //   throw new YamlEmitterError("Failed to open temporary file");
 
@@ -411,12 +421,18 @@ module Yaml {
 
     proc LibYamlEmitter.extractBytes(r: range(idxType=uint, stridable=false, ?)): bytes {
       if YamlVerbose then writeln("Extracting bytes: ", r.low, "..", r.high);
-      fseek(this.file, r.low:c_ssize_t, SEEK_SET);
-      var buf = c_malloc(uint(8), r.size);
-      fread(buf, 1, r.size, this.file);
 
-      const b = createBytesWithOwnedBuffer(buf, r.size, r.size);
+      fseek(this.file, r.low:c_ssize_t, SEEK_SET);
+
+      var buf: c_ptr(c_uchar) = c_malloc(uint(8), r.size+1);
+      fread(buf, 1, r.size, this.file);
+      buf[r.size] = 0;
+
+      const b = try! createBytesWithNewBuffer(buf, r.size, r.size+1);
+      writeln(b);
+
       c_free(buf);
+      fseek(this.file, r.high:c_ssize_t, SEEK_SET);
 
       return b;
     }
@@ -426,7 +442,7 @@ module Yaml {
       try! this._endOutputStream();
       // TODO: fix this after:  https://github.com/chapel-lang/chapel/issues/22073
       // if this.file != nil then
-        fclose(this.file);
+      fclose(this.file);
       yaml_emitter_delete(c_ptrTo(this.emitter));
       yaml_event_delete(c_ptrTo(this.event));
     }
@@ -505,15 +521,14 @@ module Yaml {
       return this.emitEvent(errorMsg = "Failed to emit mapping end event")[1];
     }
 
-    proc LibYamlEmitter.emitScalar(ref value: bytes, tag: bytes = b""): 2*uint throws {
+    proc LibYamlEmitter.emitScalar(ref value: bytes, ref tag: bytes = b""): 2*uint throws {
       if YamlVerbose then writeln("Emitting scalar: ", value);
 
-      var v = value, t = tag;
       if !yaml_scalar_event_initialize(
         c_ptrTo(this.event),
         nil, // TODO: anchor support
-        if tag.numBytes > 0 then c_ptrTo(t) else nil,
-        c_ptrTo(v),
+        if tag.numBytes > 0 then c_ptrTo(tag) else nil,
+        c_ptrTo(value),
         value.numBytes: c_int,
         (if tag.numBytes > 0 then 0 else 1): c_int,
         (if tag.numBytes > 0 then 0 else 1): c_int,
@@ -530,22 +545,22 @@ module Yaml {
       return this.emitEvent(errorMsg = "Failed to emit alias event");
     }
 
-    proc LibYamlEmitter.startDocument(implicitStart: bool = true): uint throws {
+    proc LibYamlEmitter.startDocument(implicitStart: bool = true): 2*uint throws {
       if YamlVerbose then writeln("Starting document");
 
       if !yaml_document_start_event_initialize(c_ptrTo(this.event), nil, nil, nil, implicitStart:c_int)
         then throw new YamlEmitterError("Failed to initialize document start event");
 
-      return this.emitEvent(errorMsg = "Failed to emit document start event")[0];
+      return this.emitEvent(errorMsg = "Failed to emit document start event");
     }
 
-    proc LibYamlEmitter.endDocument(implicitEnd: bool = true): uint throws {
+    proc LibYamlEmitter.endDocument(implicitEnd: bool = true): 2*uint throws {
       if YamlVerbose then writeln("Ending document");
 
       if !yaml_document_end_event_initialize(c_ptrTo(this.event), implicitEnd:c_int)
         then throw new YamlEmitterError("Failed to initialize document end event");
 
-      return this.emitEvent(errorMsg = "Failed to emit document end event")[1];
+      return this.emitEvent(errorMsg = "Failed to emit document end event");
     }
 
     // ----------------------------------------
@@ -554,7 +569,6 @@ module Yaml {
 
     inline proc LibYamlEmitter.emitEvent(param errorMsg: string): 2*uint throws {
       const start_pos = ftell(this.file);
-
       if !yaml_emitter_emit(c_ptrTo(this.emitter), c_ptrTo(this.event)) {
         select this.emitter.error {
           when YAML_MEMORY_ERROR do
@@ -570,13 +584,12 @@ module Yaml {
         throw new YamlEmitterError(errorMsg);
       }
 
+      yaml_emitter_flush(c_ptrTo(this.emitter));
       fflush(this.file);
-
       const end_pos = ftell(this.file);
       writeln("emitting event over: ", start_pos, " to ", end_pos);
 
       return (start_pos, end_pos);
-
       // return (this.event.start_mark.idx, this.event.end_mark.idx);
     }
 
@@ -669,6 +682,7 @@ module Yaml {
     private extern proc yaml_emitter_set_unicode(emitter: c_ptr(yaml_emitter_t), isU: c_int);
     private extern proc yaml_emitter_emit(emitter: c_ptr(yaml_emitter_t), event: c_ptr(yaml_event_t)): c_int;
     private extern proc yaml_emitter_delete(emitter: c_ptr(yaml_emitter_t));
+    private extern proc yaml_emitter_flush(emitter: c_ptr(yaml_emitter_t)): c_int;
 
     // event API
     private extern proc yaml_event_delete(event: c_ptr(yaml_event_t));
@@ -714,15 +728,6 @@ module Yaml {
                           style: c_int
                         ): c_int;
     private extern proc yaml_alias_event_initialize(event: c_ptr(yaml_event_t), anchor: c_ptr(c_uchar)): c_int;
-
-    private extern proc fopen(filename: c_string, mode: c_string): c_FILE;
-    private extern proc fclose(file: c_FILE): c_int;
-    private extern proc fseek(file: c_FILE, offset: c_long, origin: c_int): c_int;
-    private extern proc tmpfile(): c_FILE;
-    private extern proc fread(ptr: c_ptr(c_uchar), size: c_size_t, nmemb: c_size_t, stream: c_FILE): c_size_t;
-    private extern proc ftell(stream: c_FILE): c_long;
-    private extern proc fflush(stream: c_FILE): c_int;
-    extern const SEEK_SET: c_int;
 
     // ----------------------------------------
     // enums and errors
@@ -811,10 +816,13 @@ module Yaml {
       this.event = e;
     }
 
-    proc LibYamlParser.prepDeserialization(filePath: string) throws {
-      var f = fopen(filePath.c_str(), c"r");
+    private extern proc fdopen(fd: int(32), mode: c_string): c_FILE;
+    private extern proc fclose(file: c_FILE): c_int;
+    extern const SEEK_SET: c_int;
+
+    proc LibYamlParser.prepDeserialization(fp: c_FILE) throws {
       // TODO: error handling for file not found
-      this.f = f;
+      this.f = fp;
 
       if !yaml_parser_initialize(c_ptrTo(this.parser)) then
         throw new YamlParserError("Failed to initialize YAML parser");
@@ -840,8 +848,10 @@ module Yaml {
     proc LibYamlParser._parseNextEvent(fr): (EventType, uint, uint) throws {
       // initialize the parser if not already initialized
       if !fileIsInit {
-        const p = fr._tryGetFilePath();
-        this.prepDeserialization(p);
+        const (hasFp, fp) = fr._getFp();
+        if !hasFp then
+          throw new YamlParserError("Cannot parse from a memory file");
+        this.prepDeserialization(fp);
       }
 
       if !yaml_parser_parse(c_ptrTo(this.parser), c_ptrTo(this.event)) then
@@ -918,10 +928,6 @@ module Yaml {
     private extern proc yaml_parser_set_input_file(parser: c_ptr(yaml_parser_t), file: c_FILE): c_int;
     private extern proc yaml_parser_parse(parser: c_ptr(yaml_parser_t), event: c_ptr(yaml_event_t)): c_int;
     private extern proc yaml_event_delete(event: c_ptr(yaml_event_t));
-
-    private extern proc fopen(filename: c_string, mode: c_string): c_FILE;
-    private extern proc fclose(file: c_FILE): c_int;
-    extern const SEEK_SET: c_int;
 
     // ----------------------------------------
     // enums and errors

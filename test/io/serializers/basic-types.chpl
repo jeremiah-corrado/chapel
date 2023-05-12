@@ -18,7 +18,8 @@ proc test(val, type T = val.type) {
   writeln(header);
 
   try {
-    var f = openMemFile();
+    // var f = openMemFile();
+    var f = open("test.out", ioMode.cwr);
     {
       printDebugFmt(val);
 
@@ -131,7 +132,7 @@ class ChildChild : SimpleChild {
 
 proc main() {
   // test(true);
-  // test(5);
+  test(5);
   // test(42.0);
   // test("a-b-c-d-e-f-g");
   // test(1..10);
@@ -140,7 +141,7 @@ proc main() {
   // test((1, 2, 3));
   // test((1, 42.0, false));
   // test(colors.red);
-  test(new SimpleRecord(5, 42.0));
+  // test(new SimpleRecord(5, 42.0));
   // test(new CustomizedRecord(7, 3.14));
   // test(new GenericRecord(int, 3, 42, (1,2,3)));
   // test(new owned Parent(5));
