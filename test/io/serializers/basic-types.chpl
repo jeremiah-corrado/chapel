@@ -1,6 +1,7 @@
 
 use IO;
 use List;
+use FileSystem;
 
 use Json;
 use BinaryIO;
@@ -19,14 +20,20 @@ proc test(val, type T = val.type) {
 
   try {
     // var f = openMemFile();
-    var f = open("test.out", ioMode.cwr);
+    var f = openTempFile();
+    // var f = open("test.out", ioMode.cwr);
     {
       printDebugFmt(val);
 
       f.writer().withSerializer(FormatWriter).write(val);
+      writeln(f.reader().readAll());
     }
     {
-      var readVal = f.reader().withDeserializer(FormatReader).read(T);
+      // var readVal = f.reader(region=0..).withDeserializer(FormatReader).read(T);
+
+      var des = f.reader(region=0..).withDeserializer(FormatReader);
+      var readVal = des.read(T);
+
       writeln("--- read: ---");
       stdout.withSerializer(DefaultSerializer).writeln(readVal);
       writeln("-------------");
@@ -41,6 +48,9 @@ proc test(val, type T = val.type) {
         failures.append(T:string);
       } else writeln("SUCCESS");
     }
+    f.close();
+    // remove("test.out");
+
   } catch e : Error {
     writeln("FAILURE: ", e.message());
     failures.append(T:string);
@@ -132,7 +142,7 @@ class ChildChild : SimpleChild {
 
 proc main() {
   // test(true);
-  test(5);
+  // test(5);
   // test(42.0);
   // test("a-b-c-d-e-f-g");
   // test(1..10);
@@ -144,10 +154,10 @@ proc main() {
   // test(new SimpleRecord(5, 42.0));
   // test(new CustomizedRecord(7, 3.14));
   // test(new GenericRecord(int, 3, 42, (1,2,3)));
-  // test(new owned Parent(5));
-  // test(new owned SimpleChild(5, 42.0));
-  // //test(new owned GenericChild(5, int, 42));
-  // test(new owned ChildChild(1, 42.0, 5));
+  test(new owned Parent(5));
+  test(new owned SimpleChild(5, 42.0));
+  //test(new owned GenericChild(5, int, 42));
+  test(new owned ChildChild(1, 42.0, 5));
 
   // // Make sure we can read an initialized value into a nilable type.
   // // Needs to be 'new owned Parent?' in case the format includes type names.

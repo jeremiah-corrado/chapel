@@ -157,7 +157,7 @@ proc emitYamlDocument(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: b
 
 proc emitYamlValue(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: borrowed YamlValue) throws {
   select v.valueType() {
-    when YamlValueType.Null do writeln("null");
+    when YamlValueType.Null do writeln("~");
     when YamlValueType.Scalar do emitYamlScalar(emitter, event, v: borrowed YamlScalar);
     when YamlValueType.Sequence do emitYamlSequence(emitter, event, v: borrowed YamlSequence);
     when YamlValueType.Mapping do emitYamlMapping(emitter, event, v: borrowed YamlMapping);
@@ -242,4 +242,9 @@ proc emitYamlAlias(ref emitter: yaml_emitter_t, ref event: yaml_event_t, v: borr
 
   if !yaml_emitter_emit(c_ptrTo(emitter), c_ptrTo(event))
     then throw new Error("failed to emit alias event");
+}
+
+proc main() {
+  var docs : [1..1] owned YamlValue = [(new YamlScalar("hello world"):YamlValue),];
+  writeYamlFile("test_single.yaml", docs);
 }

@@ -1294,6 +1294,8 @@ private extern proc qio_locales_for_region(fl:qio_file_ptr_t,
                                    ref num_locs_out:c_int):errorCode;
 private extern proc qio_get_chunk(fl:qio_file_ptr_t, ref len:int(64)):errorCode;
 private extern proc qio_get_fs_type(fl:qio_file_ptr_t, ref tp:c_int):errorCode;
+private extern proc qio_get_fd(fl:qio_file_ptr_t, ref fd:int(32)):errorCode;
+private extern proc qio_get_fp(fl:qio_file_ptr_t, ref fp:c_FILE):errorCode;
 
 private extern proc qio_file_path_for_fd(fd:c_int, ref path:c_string):errorCode;
 private extern proc qio_file_path_for_fp(fp:c_FILE, ref path:c_string):errorCode;
@@ -2952,25 +2954,27 @@ operator fileWriter.=(ref lhs:fileWriter, rhs:fileWriter) {
   lhs._channel_internal = rhs._channel_internal;
   lhs._serializer = new unmanaged _serializeWrapper(rhs.serializerType, rhs._serializer!.member);
 }
-//private extern proc qio_channel_get_file_ptr(ch:qio_channel_ptr_t, ref file_out: qio_file_ptr_t);
+
 @chpldoc.nodoc
-proc fileReader._tryGetFilePath(): string throws {
-  var f: qio_file_ptr_t;
+proc fileReader._getFp(): (bool, c_FILE) {
+  extern proc fdopen(fd: int(32), mode: c_string): c_FILE;
+
+  var f: qio_file_ptr_t,
+      fd: c_int,
+      fp: c_FILE;
+
   qio_channel_get_file_ptr(this._channel_internal, f);
 
-  var ret: string;
-  var err:errorCode = 0;
-  on this._home {
-    var tmp:c_string;
-    err = qio_file_path(f, tmp);
-    if !err {
-      ret = createStringWithNewBuffer(tmp,
-                                      policy=decodePolicy.escape);
+  if qio_get_fp(f, fp) == 0 {
+    return (true, fp);
+  } else {
+    if qio_get_fd(f, fd) == 0 {
+      fp = fdopen(fd, c"r");
+      return (true, fp);
+    } else {
+      return (false, fp);
     }
-    chpl_free_c_string(tmp);
   }
-  if err then try ioerror(err, "in fileReader._tryGetFilePath");
-  return ret;
 }
 
 pragma "no doc"
