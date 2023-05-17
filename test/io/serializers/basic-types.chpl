@@ -20,8 +20,8 @@ proc test(val, type T = val.type) {
 
   try {
     // var f = openMemFile();
-    var f = openTempFile();
-    // var f = open("test.out", ioMode.cwr);
+    // var f = openTempFile();
+    var f = open("test.out", ioMode.cwr);
     {
       printDebugFmt(val);
 
@@ -141,22 +141,22 @@ class ChildChild : SimpleChild {
 }
 
 proc main() {
-  // test(true);
-  // test(5);
-  // test(42.0);
-  // test("a-b-c-d-e-f-g");
-  // test(1..10);
-  // test(1..10 by 2);
-  // test(0..9 by 2 align 1);
-  // test((1, 2, 3));
-  // test((1, 42.0, false));
-  // test(colors.red);
-  // test(new SimpleRecord(5, 42.0));
-  // test(new CustomizedRecord(7, 3.14));
-  // test(new GenericRecord(int, 3, 42, (1,2,3)));
+  test(true);
+  test(5);
+  test(42.0);
+  test("a-b-c-d-e-f-g");
+  test(1..10);
+  test(1..10 by 2);
+  test(0..9 by 2 align 1);
+  test((1, 2, 3));
+  test((1, 42.0, false));
+  test(colors.red);
+  test(new SimpleRecord(5, 42.0));
+  test(new CustomizedRecord(7, 3.14));
+  test(new GenericRecord(int, 3, 42, (1,2,3)));
   test(new owned Parent(5));
   test(new owned SimpleChild(5, 42.0));
-  //test(new owned GenericChild(5, int, 42));
+  // //test(new owned GenericChild(5, int, 42));
   test(new owned ChildChild(1, 42.0, 5));
 
   // // Make sure we can read an initialized value into a nilable type.
