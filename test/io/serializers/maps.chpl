@@ -11,12 +11,15 @@ record R {
 proc test(m: map) {
   printDebugFmt(m);
 
-  var f = openMemFile();
+  var f = openTempFile();
   {
-    f.writer().withSerializer(FormatWriter).writeln(m);
+    f.writer().withSerializer(getFormatVal(true)).writeln(m);
+    writeln("-------------------");
+    writeln(f.reader().readAll());
+    writeln("-------------------");
   }
   {
-    var x = f.reader().withDeserializer(FormatReader).read(m.type);
+    var x = f.reader().withDeserializer(getFormatVal(false)).read(m.type);
     if m != x then
       writeln("FAILURE: ", m.type:string);
     else

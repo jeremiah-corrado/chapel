@@ -41,7 +41,7 @@ module FormatHelper {
         else return new ChplDeserializer();
       }
       when FormatKind.yaml {
-        if writing then return new yamlSerializer();
+        if writing then return new yamlSerializer(SequenceStyle.Block);
         else return new yamlDeserializer();
       }
       otherwise return nothing;

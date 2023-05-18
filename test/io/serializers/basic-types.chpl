@@ -1,7 +1,6 @@
 
 use IO;
 use List;
-use FileSystem;
 
 use Json;
 use BinaryIO;
@@ -19,20 +18,15 @@ proc test(val, type T = val.type) {
   writeln(header);
 
   try {
-    // var f = openMemFile();
-    // var f = openTempFile();
-    var f = open("test.out", ioMode.cwr);
+    var f = openTempFile();
     {
       printDebugFmt(val);
 
       f.writer().withSerializer(FormatWriter).write(val);
-      writeln(f.reader().readAll());
+      // writeln(f.reader().readAll());
     }
     {
-      // var readVal = f.reader(region=0..).withDeserializer(FormatReader).read(T);
-
-      var des = f.reader(region=0..).withDeserializer(FormatReader);
-      var readVal = des.read(T);
+      var readVal = f.reader().withDeserializer(getFormatVal(false)).read(T);
 
       writeln("--- read: ---");
       stdout.withSerializer(DefaultSerializer).writeln(readVal);
@@ -48,9 +42,6 @@ proc test(val, type T = val.type) {
         failures.append(T:string);
       } else writeln("SUCCESS");
     }
-    f.close();
-    // remove("test.out");
-
   } catch e : Error {
     writeln("FAILURE: ", e.message());
     failures.append(T:string);
@@ -159,13 +150,13 @@ proc main() {
   // //test(new owned GenericChild(5, int, 42));
   test(new owned ChildChild(1, 42.0, 5));
 
-  // // Make sure we can read an initialized value into a nilable type.
-  // // Needs to be 'new owned Parent?' in case the format includes type names.
-  // test(new owned Parent?(5), owned Parent?);
+  // // // Make sure we can read an initialized value into a nilable type.
+  // // // Needs to be 'new owned Parent?' in case the format includes type names.
+  test(new owned Parent?(5), owned Parent?);
 
-  // var nilTemp : owned Parent?;
-  // test(nilTemp);
-  // test(new shared Parent(5));
+  var nilTemp : owned Parent?;
+  test(nilTemp);
+  test(new shared Parent(5));
 
   if failures.size > 0 {
     writeln("FAILURES:");

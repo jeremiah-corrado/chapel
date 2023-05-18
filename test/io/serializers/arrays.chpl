@@ -19,14 +19,14 @@ proc makeND(param rank : int) {
 
 proc test(A) {
   printDebugFmt(A);
-  var f = openMemFile();
+  var f = openTempFile();
   try {
     f.writer().withSerializer(FormatWriter).write(A);
   } catch e {
     writeln("ERROR: ", e);
   }
   try {
-    var B = f.reader().withDeserializer(FormatReader).read(A.type);
+    var B = f.reader().withDeserializer(getFormatVal(false)).read(A.type);
 
     var match = false;
     if isArray(A) {
