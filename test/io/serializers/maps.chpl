@@ -8,6 +8,25 @@ record R {
   var y : real;
 }
 
+proc R.init(x: int, y: real) {
+  this.x = x;
+  this.y = y;
+}
+
+proc R.init(reader: fileReader, ref deserializer) throws {
+  var gotError = false;
+  deserializer.startRecord(reader, "R", 2);
+  try {
+    this.x = deserializer.deserializeField(reader, "x", int);
+    this.y = deserializer.deserializeField(reader, "y", real);
+  } catch {
+    gotError = true;
+  }
+  deserializer.endRecord(reader);
+  this.complete();
+  if gotError then throw new Error();
+}
+
 proc test(m: map) {
   printDebugFmt(m);
 

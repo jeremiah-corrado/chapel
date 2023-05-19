@@ -575,3 +575,12 @@ deserializing type: R
 	startRecord: R size: 2
 		expecting event: MappingStart
 		WARNING: unexpected event: MappingEnd
+		***deserializer deinit***
+		***deserializer deinit***
+		expecting event: MappingEnd
+		***deserializer deinit***
+		***deserializer deinit***
+SUCCESS: map(R,string,false)
+		***deserializer deinit***
+		***deserializer deinit***
+		***deserializer deinit***
