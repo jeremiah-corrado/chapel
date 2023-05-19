@@ -1,0 +1,36 @@
+--- !rec0
+x: 111
+y: Yes
+...
+--- !rec1
+x: 1
+y: 2.0
+...
+--- !rec2
+thing: !rec1
+  x: 5
+  y: 6.0
+val: 7
+...
+--- !rec3
+a:
+- 1
+- 2
+- 3
+- 4
+- 5
+b: !rec2
+  thing: !rec1
+    x: 8
+    y: 9.0
+  val: 10
+...
+
+--- !rec0 {x: 111, y: Yes}
+...
+--- !rec1 {x: 1, y: 2.0}
+...
+--- !rec2 {thing: !rec1 {x: 5, y: 6.0}, val: 7}
+...
+--- !rec3 {a: [1, 2, 3, 4, 5], b: !rec2 {thing: !rec1 {x: 8, y: 9.0}, val: 10}}
+...

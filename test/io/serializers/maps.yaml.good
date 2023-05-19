@@ -1,0 +1,62 @@
+===== writing: =====
+{ east : west , hello : goodbye , north : south , day : night }
+--------------------
+--- !<%21>
+east: west
+hello: goodbye
+north: south
+day: night
+...
+
+====================
+SUCCESS: map(string,string,false)
+===== writing: =====
+{ 713 : Houston , 212 : NYC , 206 : Seattle }
+--------------------
+--- !<%21>
+713: Houston
+212: NYC
+206: Seattle
+...
+
+====================
+SUCCESS: map(int(64),string,false)
+===== writing: =====
+{ Banana : (x = 1, y = -10.0) , Apple : (x = 5, y = 42.0) , Orange : (x = 13, y = 106.7) }
+--------------------
+--- !<%21>
+Banana: !R
+  x: 1
+  y: -10.0
+Apple: !R
+  x: 5
+  y: 42.0
+Orange: !R
+  x: 13
+  y: 106.7
+...
+
+====================
+SUCCESS: map(string,R,false)
+===== writing: =====
+{ (x = 1, y = -10.0) : Banana , (x = 5, y = 42.0) : Apple , (x = 13, y = 106.7) : Orange }
+--------------------
+--- !<%21>
+? !R
+  x: 1
+  y: -10.0
+: Banana
+? !R
+  x: 5
+  y: 42.0
+: Apple
+? !R
+  x: 13
+  y: 106.7
+: Orange
+...
+
+====================
+uncaught YamlParserError: Deserializing maps with non-scalar YAML key types is not supported.
+  Yaml.chpl:414: thrown here
+  maps.chpl:19: uncaught here

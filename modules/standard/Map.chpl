@@ -665,7 +665,7 @@ module Map {
       while !done {
         try {
           add(fmt.readKey(r, keyType), fmt.readValue(r, valType));
-        } catch e {
+        } catch e: BadFormatError {
           done = true;
         }
       }

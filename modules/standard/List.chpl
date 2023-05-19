@@ -1857,7 +1857,7 @@ module List {
           var elt = fmt.readArrayElement(r, eltType);
           // read an element
           _appendByRef(elt);
-        } catch e {
+        } catch e: BadFormatError {
           done = true;
         }
       }
