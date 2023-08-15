@@ -149,8 +149,15 @@ proc array22test(ri: int) {
 proc sum0(l) do return l * (l-1) / 2;  // sum(0..l-1)
 proc sum1(l) do return l * (l+1) / 2;  // sum(1..l)
 
-proc check(actual, expected, ri, name) {
+proc check(actual: integral, expected: integral, ri, name) {
   if actual == expected then return; // OK!
+  nErr += 1;
+  writeln("ERROR: onetest(", ri, ", ", name, ")  expected ", expected,
+          "  actual ", actual);
+}
+
+proc check(actual: real, expected: real, ri, name) {
+  if isClose(actual, expected) then return; // OK!
   nErr += 1;
   writeln("ERROR: onetest(", ri, ", ", name, ")  expected ", expected,
           "  actual ", actual);
