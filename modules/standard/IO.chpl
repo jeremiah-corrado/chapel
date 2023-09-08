@@ -4737,6 +4737,12 @@ proc fileReader.seek(region: range(?)) throws where (!region.hasHighBound() ||
    This function will, in most cases, discard the fileWriter's buffer.
    The data will be saved to the file before discarding.
 
+   asdf
+
+   asdf
+
+   asdf
+
    :arg region: the new region, measured in bytes and counting from 0
 
    .. warning::
