@@ -43,6 +43,14 @@ module ChapelTaskTable {
 
   enum taskState { pending, active, suspended };
 
+  operator :(x: taskState, type t:string) {
+    select x {
+      when taskState.pending do return "pending";
+      when taskState.active do return "active";
+      otherwise do return "suspended";
+    }
+  }
+
   //
   // This represents a currently running task.  The state, lineno, and
   // filename members should be obvious; tl_info is information belonging
