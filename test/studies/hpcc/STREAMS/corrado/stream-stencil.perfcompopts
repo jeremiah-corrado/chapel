@@ -1,0 +1,3 @@
+../../common/probSize.chpl --no-local -sKernel=KernelKind.access # stream-stencil-access.dat
+../../common/probSize.chpl --no-local -sKernel=KernelKind.zippered # stream-stencil-zippered.dat
+../../common/probSize.chpl --no-local -sKernel=KernelKind.promotion # stream-stencil-promotion.dat

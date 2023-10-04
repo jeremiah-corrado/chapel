@@ -1,0 +1,3 @@
+../../common/probSize.chpl --no-local -sKernel=KernelKind.access
+../../common/probSize.chpl --no-local -sKernel=KernelKind.zippered
+../../common/probSize.chpl --no-local -sKernel=KernelKind.promotion
