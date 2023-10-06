@@ -540,6 +540,7 @@ class StencilArr: BaseRectangularArr(?) {
   pragma "local field"
   var myLocArr: unmanaged LocStencilArr(eltType, rank, idxType, strides)?;
   const SENTINEL = max(rank*idxType);
+  const FLAG_SENTINEL = max(rank*idxType);
 }
 
 //
@@ -559,10 +560,13 @@ class LocStencilArr : writeSerializable {
   param strides: strideKind;
   const locDom: unmanaged LocStencilDom(rank, idxType, strides);
   var locRAD: unmanaged LocRADCache(eltType, rank, idxType, strides)?; // non-nil if doRADOpt=true
+  var flagRAD: unmanaged LocRADCache(atomic bool, locDom.NeighDom.rank, locDom.NeighDom.idxType, locDom.NeighDom.strides)?;
+
   pragma "local field" pragma "unsafe"
   // may be initialized separately
   var myElems: [locDom.myFluff] eltType;
   var locRADLock: chpl_LocalSpinlock;
+  var flagRADLock: chpl_LocalSpinlock;
 
   // TODO: use void type when packed update is disabled
   var recvBufs, sendBufs : [locDom.NeighDom] [locDom.bufDom] eltType;
@@ -614,6 +618,9 @@ class LocStencilArr : writeSerializable {
 
     if locRAD != nil then
       delete locRAD;
+
+    if flagRAD != nil then
+      delete flagRAD;
   }
 
   // guard against dynamic dispatch resolution trying to resolve
@@ -1468,16 +1475,34 @@ proc StencilArr.setupRADOpt() {
   for localeIdx in dom.dist.targetLocDom {
     on dom.dist.targetLocales(localeIdx) {
       const myLocArr = locArr(localeIdx);
+      
       if myLocArr.locRAD != nil {
         delete myLocArr.locRAD;
         myLocArr.locRAD = nil;
       }
+
+      if myLocArr.flagRAD != nil {
+        delete myLocArr.flagRAD;
+        myLocArr.flagRAD = nil;
+      }
+
       if disableStencilLazyRAD {
         myLocArr.locRAD = new unmanaged LocRADCache(eltType, rank, idxType,
                                              strides, dom.dist.targetLocDom);
+        
+        ref nd = myLocArr.locDom.NeighDom;
+        myLocArr.flagRAD = new unmanaged LocRADCache(
+          atomic bool,
+          nd.rank,
+          nd.idxType,
+          nd.strides,
+          dom.dist.targetLocDom
+        );
+        
         for l in dom.dist.targetLocDom {
           if l != localeIdx {
-            myLocArr.locRAD.RAD(l) = locArr(l).myElems._value.dsiGetRAD();
+            myLocArr.locRAD!.RAD[l] = locArr[l].myElems._value.dsiGetRAD();
+            myLocArr.flagRAD!.RAD[l] = locArr[l].sendRecvFlag._value.dsiGetRAD();
           }
         }
       }
@@ -1561,8 +1586,8 @@ proc StencilArr.do_dsiAccess(param setter, const in idx: rank*idxType) ref {
   return nonLocalAccess(idx);
 }
 
+// pragma "fn unordered safe"
 proc StencilArr.nonLocalAccess(i: rank*idxType) ref {
-
   if doRADOpt {
     if myLocArr {
       const myLocArr = _to_nonnil(this.myLocArr);
@@ -1597,6 +1622,50 @@ proc StencilArr.nonLocalAccess(i: rank*idxType) ref {
     }
   }
   return locArr(dom.dist.targetLocsIdx(i))(i);
+}
+
+proc StencilArr.sendRecvNonLocalAccess(locIds, i) ref {
+  if doRADOpt {
+    if myLocArr {
+      const myLocArr = _to_nonnil(this.myLocArr),
+            locIdx = this.dom.dist.targetLocales[locIds].id;
+      if !disableStencilLazyRAD {
+        if myLocArr.flagRAD == nil {
+          myLocArr.flagRADLock.lock();
+          if myLocArr.flagRAD == nil {
+            ref nd = myLocArr.locDom.NeighDom;
+            var tempFlagRAD =
+              new unmanaged LocRADCache(
+                atomic bool,
+                nd.rank,
+                nd.idxType,
+                nd.strides,
+                dom.dist.targetLocDom
+              );
+            tempFlagRAD.RAD.blk = FLAG_SENTINEL;
+            myLocArr.flagRAD = tempFlagRAD;
+          }
+          myLocArr.flagRADLock.unlock();
+        }
+        const flagRAD = _to_nonnil(myLocArr.flagRAD);
+        if flagRAD.RAD(locIds).blk == FLAG_SENTINEL {
+          flagRAD.lockRAD(locIds);
+          if flagRAD.RAD(locIds).blk == FLAG_SENTINEL {
+            flagRAD.RAD(locIds) =
+              locArr(locIds).sendRecvFlag._value.dsiGetRAD();
+          }
+          flagRAD.unlockRAD(locIds);
+        }
+      }
+      pragma "no copy" pragma "no auto destroy" var myFlagRAD = _to_nonnil(myLocArr.flagRAD);
+      pragma "no copy" pragma "no auto destroy" var radata = myFlagRAD.RAD;
+      if radata(locIds).shiftedData != nil {
+        var dataIdx = radata(locIds).getDataIndex(i);
+        return radata(locIds).getDataElem(dataIdx);
+      }
+    }
+  }
+  return locArr[locIds].sendRecvFlag(i);
 }
 
 // ref version
@@ -1982,9 +2051,13 @@ proc StencilArr.naiveUpdateFluff() {
 //    c) Copy elements from the local buffer into the cache
 //
 proc StencilArr._packedUpdate() {
+  // use Communication, CTypes;
+
   coforall i in dom.dist.targetLocDom {
     on dom.dist.targetLocales(i) {
-      var myLocDom = locArr[i].locDom;
+      const currLocArr = chpl_getPrivatizedCopy(this.type, this.pid).locArr[i];
+
+      const myLocDom = currLocArr.locDom;
 
       proc translateIdx(idx) {
         return -1 * chpl__tuplify(idx);
@@ -2007,22 +2080,23 @@ proc StencilArr._packedUpdate() {
             //
             // TODO: Should we have a serialization helper for N-dimensional
             // DefaultRectangulars into 1-dimension arrays?
-            ref src = locArr[i].myElems[S];
-            ref buf = locArr[i].sendBufs[sendBufIdx];
+            ref src = currLocArr.myElems[S];
+            ref buf = currLocArr.sendBufs[sendBufIdx];
             local do for (s, i) in zip(src, buf.domain.first..#src.sizeAs(int)) do buf[i] = s;
 
             if debugStencilDist then
               writeln("Filled ", here, ".", S, " for ", dom.dist.targetLocales(recvIdx), "::", recvBufIdx);
-            locArr[recvIdx].sendRecvFlag[recvBufIdx].write(true);
+            // locArr[recvIdx].sendRecvFlag[recvBufIdx].write(true);
+            sendRecvNonLocalAccess(recvIdx, recvBufIdx).write(true);
           } else {
             // 'naive' update
-            locArr[recvIdx].myElems[D] = locArr[i].myElems[S];
+            locArr[recvIdx].myElems[D] = currLocArr.myElems[S];
           }
         }
       }
       forall (D, S, srcIdx, recvBufIdx) in zip(myLocDom.recvDest, myLocDom.recvSrc,
-                                               myLocDom.Neighs,
-                                               myLocDom.NeighDom) {
+                                              myLocDom.Neighs,
+                                              myLocDom.NeighDom) {
         const chunkSize  = max(1, S.dim(rank-1).sizeAs(int)); // avoid divide by zero
         const numChunks = S.sizeAs(int) / chunkSize;
 
@@ -2032,13 +2106,25 @@ proc StencilArr._packedUpdate() {
           const srcBufIdx = translateIdx(recvBufIdx);
           if debugStencilDist then
             writeln(here, "::", recvBufIdx, " WAITING");
-          locArr[i].sendRecvFlag[recvBufIdx].waitFor(true); // Can we read yet?
-          locArr[i].sendRecvFlag[recvBufIdx].write(false);  // reset for next call
+          currLocArr.sendRecvFlag[recvBufIdx].waitFor(true); // Can we read yet?
+          currLocArr.sendRecvFlag[recvBufIdx].write(false);  // reset for next call
 
-          locArr[i].recvBufs[recvBufIdx][1..D.sizeAs(int)] = locArr[srcIdx].sendBufs[srcBufIdx][1..D.sizeAs(int)];
+          currLocArr.recvBufs[recvBufIdx][1..D.sizeAs(int)] = locArr[srcIdx].sendBufs[srcBufIdx][1..D.sizeAs(int)];
+          // locArr[i].recvBufs[recvBufIdx] = locArr[srcIdx].sendBufs[srcBufIdx];
 
-          ref dest = locArr[i].myElems[D];
-          ref buf = locArr[i].recvBufs[recvBufIdx];
+          // var x: c_ptr(void);
+          // on this.dom.dist.targetLocales[srcIdx] do
+          //   x = c_ptrTo(locArr[srcIdx].sendBufs[srcBufIdx][1]): c_ptr(void);
+
+          // get(
+          //   c_ptrTo(locArr[i].recvBufs[recvBufIdx][1]),
+          //   x,
+          //   this.dom.dist.targetLocales[srcIdx].id,
+          //   D.sizeAs(int)
+          // );`
+
+          ref dest = currLocArr.myElems[D];
+          ref buf = currLocArr.recvBufs[recvBufIdx];
           local do for (d, i) in zip(dest, buf.domain.first..#dest.sizeAs(int)) do d = buf[i];
         }
       }
@@ -2157,17 +2243,24 @@ proc StencilImpl.dsiReprivatize(other, reprivatizeData) {
 
 override proc StencilDom.dsiSupportsPrivatization() param do return true;
 
-proc StencilDom.dsiGetPrivatizeData() do return (dist.pid, whole.dims());
+record stencilDomPrvData {
+  var distpid;
+  var dims;
+  var locdoms;
+}
+
+proc StencilDom.dsiGetPrivatizeData() do
+  return new stencilDomPrvData(dist.pid, whole.dims(), locDoms);
 
 proc StencilDom.dsiPrivatize(privatizeData) {
-  var privdist = chpl_getPrivatizedCopy(dist.type, privatizeData(0));
+  var privdist = chpl_getPrivatizedCopy(dist.type, privatizeData.distpid);
 
   var locDomsTemp: [privdist.targetLocDom]
                       unmanaged LocStencilDom(rank, idxType, strides)
-    = locDoms;
+    = privatizeData.locdoms;
 
   var c = new unmanaged StencilDom(rank, idxType, strides, ignoreFluff,
-            privdist, locDomsTemp, {(...privatizeData(1))}, fluff, periodic);
+            privdist, locDomsTemp, {(...privatizeData.dims)}, fluff, periodic);
 
   if c.whole.sizeAs(int) > 0 {
     var absFluff : fluff.type;
@@ -2228,14 +2321,20 @@ proc type StencilArr.chpl__deserialize(data) {
 
 override proc StencilArr.dsiSupportsPrivatization() param do return true;
 
-proc StencilArr.dsiGetPrivatizeData() do return dom.pid;
+record stencilArrPrvData {
+  var dompid;
+  var locarr;
+}
+
+proc StencilArr.dsiGetPrivatizeData() do
+  return new stencilArrPrvData(dom.pid, locArr);
 
 proc StencilArr.dsiPrivatize(privatizeData) {
-  var privdom = chpl_getPrivatizedCopy(dom.type, privatizeData);
+  var privdom = chpl_getPrivatizedCopy(dom.type, privatizeData.dompid);
 
   var locArrTemp: [privdom.dist.targetLocDom]
         unmanaged LocStencilArr(eltType, rank, idxType, strides)
-    = locArr;
+    = privatizeData.locarr;
 
   var myLocArrTemp: unmanaged LocStencilArr(eltType, rank, idxType, strides)?;
   for localeIdx in privdom.dist.targetLocDom do
@@ -2505,6 +2604,7 @@ proc StencilArr.doiOptimizedSwap(other: this.type)
       on locarr1 {
         locarr1.myElems <=> locarr2.myElems;
         locarr1.locRAD <=> locarr2.locRAD;
+        locarr1.flagRAD <=> locarr2.flagRAD;
       }
     }
     return true;
