@@ -2109,19 +2109,19 @@ proc StencilArr._packedUpdate() {
           currLocArr.sendRecvFlag[recvBufIdx].waitFor(true); // Can we read yet?
           currLocArr.sendRecvFlag[recvBufIdx].write(false);  // reset for next call
 
-          currLocArr.recvBufs[recvBufIdx][1..D.sizeAs(int)] = locArr[srcIdx].sendBufs[srcBufIdx][1..D.sizeAs(int)];
+          // currLocArr.recvBufs[recvBufIdx][1..D.sizeAs(int)] = locArr[srcIdx].sendBufs[srcBufIdx][1..D.sizeAs(int)];
           // locArr[i].recvBufs[recvBufIdx] = locArr[srcIdx].sendBufs[srcBufIdx];
 
           // var x: c_ptr(void);
           // on this.dom.dist.targetLocales[srcIdx] do
           //   x = c_ptrTo(locArr[srcIdx].sendBufs[srcBufIdx][1]): c_ptr(void);
 
-          // get(
-          //   c_ptrTo(locArr[i].recvBufs[recvBufIdx][1]),
-          //   x,
-          //   this.dom.dist.targetLocales[srcIdx].id,
-          //   D.sizeAs(int)
-          // );`
+          get(
+            c_ptrTo(locArr[i].recvBufs[recvBufIdx][1]),
+            __primitive("_wide_get_addr", locArr[srcIdx].sendBufs[srcBufIdx][1]):c_ptr(void),
+            this.dom.dist.targetLocales[srcIdx].id,
+            D.sizeAs(int)
+          );`
 
           ref dest = currLocArr.myElems[D];
           ref buf = currLocArr.recvBufs[recvBufIdx];
