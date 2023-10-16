@@ -2086,8 +2086,8 @@ proc StencilArr._packedUpdate() {
 
             if debugStencilDist then
               writeln("Filled ", here, ".", S, " for ", dom.dist.targetLocales(recvIdx), "::", recvBufIdx);
-            // locArr[recvIdx].sendRecvFlag[recvBufIdx].write(true);
-            sendRecvNonLocalAccess(recvIdx, recvBufIdx).write(true);
+            locArr[recvIdx].sendRecvFlag[recvBufIdx].write(true);
+            // sendRecvNonLocalAccess(recvIdx, recvBufIdx).write(true);
           } else {
             // 'naive' update
             locArr[recvIdx].myElems[D] = currLocArr.myElems[S];
@@ -2118,10 +2118,10 @@ proc StencilArr._packedUpdate() {
 
           get(
             c_ptrTo(locArr[i].recvBufs[recvBufIdx][1]),
-            __primitive("_wide_get_addr", locArr[srcIdx].sendBufs[srcBufIdx][1]):c_ptr(void),
+            __primitive("_wide_get_addr", locArr[srcIdx].sendBufs[srcBufIdx]):c_ptr(void),
             this.dom.dist.targetLocales[srcIdx].id,
             D.sizeAs(int)
-          );`
+          );
 
           ref dest = currLocArr.myElems[D];
           ref buf = currLocArr.recvBufs[recvBufIdx];
