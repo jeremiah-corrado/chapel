@@ -39,17 +39,38 @@ u[nx/4..nx/2, ny/4..ny/2] = 2.0;
 
 // array wrapper for creating a "skyline" array of halo buffers
 record haloArray {
-  var d: domain(1);
+  param ns: bool;
+  var d: domain(2);
   var v: [d] real;
 
-  proc init() do this.d = {1..0};
-  proc init(r: range(int)) do
-    this.d = {r};
+  proc init(param ns: bool) {
+    this.ns = ns;
+    this.d = {1..0, 1..0};
+  }
+
+  proc init(param ns: bool, d: domain(2)) {
+    this.ns = ns;
+    this.d = d;
+  }
+
+  proc type NS(r: range(int)) {
+    return new haloArray(true, {1..1, r});
+  }
+
+  proc type EW(r: range(int)) {
+    return new haloArray(false, {r, 1..1});
+  }
+
+  proc this(i: int): real {
+    if this.ns
+      then return this.v[1, i];
+      else return this.v[i, 1];
+  }
 }
 
-// set up array of halo buffers over same distribution as 'u.targetLocales'
+// // set up array of halo buffers over same distribution as 'u.targetLocales'
 var OnePerLocale = blockDist.createDomain(u.targetLocales().domain);
-var HaloArrays: [OnePerLocale] [0..<4] haloArray;
+var HaloArrays: [OnePerLocale] (haloArray(true), haloArray(true), haloArray(false), haloArray(false));
 
 // buffer edge indices: North, East, South, West
 param N = 0, S = 1, E = 2, W = 3;
@@ -71,10 +92,10 @@ proc main() {
     const localDom = u.localSubdomain(here);
 
     // allocate halo arrays
-    HaloArrays[tidX, tidY][N] = new haloArray(localDom.dim(1));
-    HaloArrays[tidX, tidY][S] = new haloArray(localDom.dim(1));
-    HaloArrays[tidX, tidY][E] = new haloArray(localDom.dim(0));
-    HaloArrays[tidX, tidY][W] = new haloArray(localDom.dim(0));
+    HaloArrays[tidX, tidY][N] = haloArray.NS(localDom.dim(1));
+    HaloArrays[tidX, tidY][S] = haloArray.NS(localDom.dim(1));
+    HaloArrays[tidX, tidY][E] = haloArray.EW(localDom.dim(0));
+    HaloArrays[tidX, tidY][W] = haloArray.EW(localDom.dim(0));
 
     // synchronize across tasks
     b.barrier();
@@ -111,10 +132,10 @@ proc work(tidX: int, tidY: int) {
   // iterate for 'nt' time steps
   for 1..nt {
     // store results from last iteration in neighboring task's halo buffers
-    if tidY > 0       then HaloArrays[tidX, tidY-1][E].v = u[nEdge..sEdge, wEdge];
-    if tidY < tidYMax then HaloArrays[tidX, tidY+1][W].v = u[nEdge..sEdge, eEdge];
-    if tidX > 0       then HaloArrays[tidX-1, tidY][S].v = u[nEdge, wEdge..eEdge];
-    if tidX < tidXMax then HaloArrays[tidX+1, tidY][N].v = u[sEdge, wEdge..eEdge];
+    if tidY > 0       then HaloArrays[tidX, tidY-1][E].v = u[{nEdge..sEdge, wEdge..wEdge}];
+    if tidY < tidYMax then HaloArrays[tidX, tidY+1][W].v = u[{nEdge..sEdge, eEdge..eEdge}];
+    if tidX > 0       then HaloArrays[tidX-1, tidY][S].v = u[{nEdge..nEdge, wEdge..eEdge}];
+    if tidX < tidXMax then HaloArrays[tidX+1, tidY][N].v = u[{sEdge..sEdge, wEdge..eEdge}];
 
     // synchronize with other tasks
     b.barrier();
@@ -136,8 +157,8 @@ proc work(tidX: int, tidY: int) {
     if tidX > 0 {
       forall j in localIndicesInner.dim(1) with (ref u) do
         u.localAccess[nEdge, j] = un.localAccess[nEdge, j] + alpha * (
-          HaloArrays[tidX, tidY][N].v[j] + un.localAccess[nEdge, j-1] +
-          un.localAccess[nEdge+1, j]     + un.localAccess[nEdge, j+1] -
+          HaloArrays[tidX, tidY][N][j] + un.localAccess[nEdge, j-1] +
+          un.localAccess[nEdge+1, j]   + un.localAccess[nEdge, j+1] -
           4 * un.localAccess[nEdge, j]
         );
     }
@@ -146,8 +167,8 @@ proc work(tidX: int, tidY: int) {
     if tidX < tidXMax {
       forall j in localIndicesInner.dim(1) with (ref u) do
         u.localAccess[sEdge, j] = un.localAccess[sEdge, j] + alpha * (
-          un.localAccess[sEdge-1, j]     + un.localAccess[sEdge, j-1] +
-          HaloArrays[tidX, tidY][S].v[j] + un.localAccess[sEdge, j+1] -
+          un.localAccess[sEdge-1, j]   + un.localAccess[sEdge, j-1] +
+          HaloArrays[tidX, tidY][S][j] + un.localAccess[sEdge, j+1] -
           4 * un.localAccess[sEdge, j]
         );
     }
@@ -157,7 +178,7 @@ proc work(tidX: int, tidY: int) {
       forall i in localIndicesInner.dim(0) with (ref u) do
         u.localAccess[i, eEdge] = un.localAccess[i, eEdge] + alpha * (
           un.localAccess[i-1, eEdge] + un.localAccess[i, eEdge-1] +
-          un.localAccess[i+1, eEdge] + HaloArrays[tidX, tidY][E].v[i] -
+          un.localAccess[i+1, eEdge] + HaloArrays[tidX, tidY][E][i] -
           4 * un.localAccess[i, eEdge]
         );
     }
@@ -166,7 +187,7 @@ proc work(tidX: int, tidY: int) {
     if tidY > 0 {
       forall i in localIndicesInner.dim(0) with (ref u) do
         u.localAccess[i, wEdge] = un.localAccess[i, wEdge] + alpha * (
-          un.localAccess[i-1, wEdge] + HaloArrays[tidX, tidY][W].v[i] +
+          un.localAccess[i-1, wEdge] + HaloArrays[tidX, tidY][W][i] +
           un.localAccess[i+1, wEdge] + un.localAccess[i, wEdge+1] -
           4 * un.localAccess[i, wEdge]
         );
@@ -175,8 +196,8 @@ proc work(tidX: int, tidY: int) {
     // North West Corner
     if tidX > 0 && tidY > 0 {
         u.localAccess[nEdge, wEdge] = un.localAccess[nEdge, wEdge] + alpha * (
-          HaloArrays[tidX, tidY][N].v[wEdge] + HaloArrays[tidX, tidY][W].v[nEdge] +
-          un.localAccess[nEdge+1, wEdge]     + un.localAccess[nEdge, wEdge+1] -
+          HaloArrays[tidX, tidY][N][wEdge] + HaloArrays[tidX, tidY][W][nEdge] +
+          un.localAccess[nEdge+1, wEdge]   + un.localAccess[nEdge, wEdge+1] -
           4 * un.localAccess[nEdge, wEdge]
         );
     }
@@ -184,8 +205,8 @@ proc work(tidX: int, tidY: int) {
     // North East Corner
     if tidX > 0 && tidY < tidYMax {
       u.localAccess[nEdge, eEdge] = un.localAccess[nEdge, eEdge] + alpha * (
-        HaloArrays[tidX, tidY][N].v[eEdge] + un.localAccess[nEdge, eEdge-1] +
-        un.localAccess[nEdge+1, eEdge]     + HaloArrays[tidX, tidY][E].v[nEdge] -
+        HaloArrays[tidX, tidY][N][eEdge] + un.localAccess[nEdge, eEdge-1] +
+        un.localAccess[nEdge+1, eEdge]   + HaloArrays[tidX, tidY][E][nEdge] -
         4 * un.localAccess[nEdge, eEdge]
       );
     }
@@ -193,8 +214,8 @@ proc work(tidX: int, tidY: int) {
     // South West Corner
     if tidX < tidXMax && tidY > 0 {
       u.localAccess[sEdge, wEdge] = un.localAccess[sEdge, wEdge] + alpha * (
-        un.localAccess[sEdge-1, wEdge]     + HaloArrays[tidX, tidY][W].v[sEdge] +
-        HaloArrays[tidX, tidY][S].v[wEdge] + un.localAccess[sEdge, wEdge+1] -
+        un.localAccess[sEdge-1, wEdge]   + HaloArrays[tidX, tidY][W][sEdge] +
+        HaloArrays[tidX, tidY][S][wEdge] + un.localAccess[sEdge, wEdge+1] -
         4 * un.localAccess[sEdge, wEdge]
       );
     }
@@ -202,8 +223,8 @@ proc work(tidX: int, tidY: int) {
     // South East Corner
     if tidX < tidXMax && tidY < tidYMax {
       u.localAccess[sEdge, eEdge] = un.localAccess[sEdge, eEdge] + alpha * (
-        un.localAccess[sEdge-1, eEdge]     + un.localAccess[sEdge, eEdge-1] +
-        HaloArrays[tidX, tidY][S].v[eEdge] + HaloArrays[tidX, tidY][E].v[sEdge] -
+        un.localAccess[sEdge-1, eEdge]   + un.localAccess[sEdge, eEdge-1] +
+        HaloArrays[tidX, tidY][S][eEdge] + HaloArrays[tidX, tidY][E][sEdge] -
         4 * un.localAccess[sEdge, eEdge]
       );
     }
