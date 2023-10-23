@@ -189,7 +189,7 @@ module Chai {
             const fanIn = kernelSize * kernelSize * inChannels;
             const fanOut = outChannels;
             const stddev = sqrt(2.0 / (fanOut + fanIn));
-            this.filters = tn.randn(outChannels,kernelSize,kernelSize,inChannels,mu=0.0,sigma=stddev);
+            this.filters = tn.randn(tn.domainFromShape(outChannels,kernelSize,kernelSize,inChannels),mu=0.0,sigma=stddev);
             
             this.filtersGrad = tn.zeros(numFilters,kernelSize,kernelSize,inChannels);
             this.stride = stride;

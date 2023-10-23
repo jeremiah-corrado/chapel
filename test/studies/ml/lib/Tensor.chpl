@@ -9,10 +9,10 @@ module Tensor {
 
     param debugPrint = false;
 
-    var rng = new Random.NPBRandom.NPBRandomStream(eltType=real(64),seed=5);
-    
+    var rng = new Random.NPBRandom.NPBRandomStream(eltType=real(64),seed=5, parSafe=true);
+
     proc seedRandom(seed) {
-        rng = new Random.NPBRandom.NPBRandomStream(eltType=real(64),seed=(2 * seed + 1));
+        rng = new Random.NPBRandom.NPBRandomStream(eltType=real(64),seed=(2 * seed + 1), parSafe=true);
     }
 
     proc err(args...?n) {
@@ -146,7 +146,6 @@ module Tensor {
         proc init(itr) where itr.type:string == "promoted expression" || isSubtype(itr.type, _iteratorRecord) {
             const A = itr;
             this.init(A);
-            writeln("init(iter)");
         }
 
         proc init=(other: Tensor(?rank,?eltType)) {
@@ -521,41 +520,47 @@ module Tensor {
         return y;
     }
 
-    // Wikipedia implementation (helper for randn)
-    // mu : mean
-    // sigma : standard deviation
-    proc boxMuller(mu: real, sigma: real) {
-        var u1 = rng.getNext();
-        var u2 = rng.getNext();
-        var z0 = sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.pi * u2);
-        return mu + (sigma * z0);
-    }
-    proc normal() {
-        return boxMuller(0.0,1.0);
-    }
+    // // Wikipedia implementation (helper for randn)
+    // // mu : mean
+    // // sigma : standard deviation
+    // proc boxMuller(mu: real, sigma: real) {
+    //     var u1 = rng.getNext();
+    //     var u2 = rng.getNext();
+    //     var z0 = sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.pi * u2);
+    //     return mu + (sigma * z0);
+    // }
+    // proc normal() {
+    //     return boxMuller(0.0,1.0);
+    // }
 
-    // Initialize a tensor with random values from a normal distribution
-    proc randn(shape: int ...?d): Tensor(d,real) {
-        var u1, u2: [domainFromShape((...shape))] real;
-        Random.fillRandom(u1,seed=(rng.getNext() * 10):int);
-        Random.fillRandom(u2,seed=(rng.getNext() * 10):int);
+    proc boxMuller(d: domain(?), mu: real = 0.0, sigma: real = 1.0): Tensor(d.rank, real) {
+        var u1, u2: [d] real;
+        rng.fillRandom(u1);
+        rng.fillRandom(u2);
         const u1p = -2.0 * Math.log(u1);
         const u2p = 2.0 * Math.pi * u2;
         var z0 = sqrt(u1p);
         z0 *= Math.cos(u2p);
-        return new Tensor(z0);
+        return new Tensor(mu + sigma * z0);
     }
 
+    proc randn(shape: int ...?d): Tensor(d, real) do
+        return boxMuller(domainFromShape((...shape)));
+
     // Initialize a tensor with random values from a normal distribution
-    proc randn(shape: int ...?d, mu: real, sigma: real): Tensor(d,real) {
-        var t = new Tensor((...shape));
-        var m: [t.data.domain] real;
-        for i in m.domain {
-            var x: real = boxMuller(mu,sigma);
-            m[i] = x;
-        }
-        return new Tensor(m);
-    }
+    proc randn(d: domain(?), mu: real = 0.0, sigma: real = 1.0): Tensor(d.rank,real) do
+        return boxMuller(d, mu, sigma);
+
+    // // Initialize a tensor with random values from a normal distribution
+    // proc randn(shape: int ...?d, mu: real, sigma: real): Tensor(d,real) {
+    //     var t = new Tensor((...shape));
+    //     var m: [t.data.domain] real;
+    //     for i in m.domain {
+    //         var x: real = boxMuller(mu,sigma);
+    //         m[i] = x;
+    //     }
+    //     return new Tensor(m);
+    // }
 
     // Initialize a tensor with zero values
     proc zeros(shape: int ...?d): Tensor(d,real) {
@@ -796,4 +801,3 @@ module Tensor {
         return dK;
     }
 }
-
