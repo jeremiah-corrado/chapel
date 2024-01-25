@@ -1,11 +1,3 @@
-1brc-locking-aggregator.chpl:85: In method 'flush':
-1brc-locking-aggregator.chpl:87: warning: borrowed sharedLock(map(bytes,tempData,false)) is being used in a 'manage' statement via its 'enterContext' and 'exitContext' methods. However, borrowed sharedLock(map(bytes,tempData,false)) does not implement contextManager. In the future, this will result in an error.
-Bridgetown=26.9/26.9/26.9
-Bulawayo=8.9/8.9/8.9
-Conakry=31.2/31.2/31.2
-Cracow=12.6/12.6/12.6
-Hamburg=12.0/12.0/12.0
-Istanbul=6.2/14.6/23.0
-Palembang=38.8/38.8/38.8
-Roseau=34.4/34.4/34.4
-St. John's=15.2/15.2/15.2
+1brc-locking-aggregator.chpl:91: In method 'flush':
+1brc-locking-aggregator.chpl:93: warning: borrowed sharedLock(map(bytes,tempData,false)) is being used in a 'manage' statement via its 'enterContext' and 'exitContext' methods. However, borrowed sharedLock(map(bytes,tempData,false)) does not implement contextManager. In the future, this will result in an error.
+{Bridgetown=26.9/26.9/26.9, Bulawayo=8.9/8.9/8.9, Conakry=31.2/31.2/31.2, Cracow=12.6/12.6/12.6, Hamburg=12.0/12.0/12.0, Istanbul=6.2/14.6/23.0, Palembang=38.8/38.8/38.8, Roseau=34.4/34.4/34.4, St. John's=15.2/15.2/15.2}

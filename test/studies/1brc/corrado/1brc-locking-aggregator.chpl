@@ -25,7 +25,13 @@ proc main() {
         use Sort;
         var x = globalTempsMap.item.toArray();
         sort(x);
-        for (city, temps) in x do writeln(city, "=", temps);
+        var first = true;
+        write("{");
+        for (city, temps) in x {
+            if first then first = false; else write(", ");
+            write(city, "=", temps);
+        }
+        writeln("}");
     }
 }
 
