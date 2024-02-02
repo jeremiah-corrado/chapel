@@ -121,6 +121,42 @@ module Random {
     return d.isRectangular() && d.rank == 1;
 
 
+  @chpldoc.nodoc
+  record dur {
+    var r: fileReader(locking=true);
+    var didOpen: bool = false;
+
+    proc init() {
+      this.r = try! openTempFile().reader(locking=true);
+      init this;
+      this.openURand();
+    }
+
+    proc ref openURand() {
+      try {
+        this.r = IO.openReader("/dev/urandom", locking=true);
+        this.didOpen = true;
+      } catch {
+        // may not be able to open /dev/urandom, ignore this step
+      }
+    }
+
+    proc getBits(): int {
+      if this.didOpen {
+        try {
+          return this.r.readBits(int, 64);
+        } catch {
+          return 0;
+        }
+      } else {
+        return 0;
+      }
+    }
+  }
+
+  @chpldoc.nodoc
+  const devUrandomReader = new dur();
+
   private proc randomishSeed(): int {
     import Time, IO, CTypes;
     extern proc chpl_task_getId(): chpl_taskID_t;
@@ -129,14 +165,8 @@ module Random {
     const sWho = chpl_task_getId().hash():int,
           sWhat = (getpid():int).hash():int,
           sWhen = Time.timeSinceEpoch().totalSeconds().hash():int,
-          sWhere = here.hash():int;
-
-    var randomBits: int = 0;
-    try {
-      IO.openReader("/dev/urandom").readBits(randomBits, 64);
-    } catch {
-      // may not be able to open /dev/urandom, ignore this step
-    }
+          sWhere = here.hash():int,
+          randomBits = devUrandomReader.getBits();
 
     return sWho ^ sWhat ^ sWhen ^ sWhere ^ randomBits;
   }
