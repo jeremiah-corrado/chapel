@@ -1,0 +1,1 @@
+nonLocalBulkElements.chpl:9: error: references to remote data cannot be passed to external routines like 'c_pointer_return'
