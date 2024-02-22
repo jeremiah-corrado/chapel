@@ -8655,13 +8655,16 @@ proc fileWriter.writeBinary(const ref data: [?d] ?t, param endian:endianness = e
       e : errorCode = 0; // errors from performing the IO
 
   on this._home {
+    // var mystdout = (new file(chpl_cstdout())).writer();
+    this.withSerializer(defaultSerializer).writeln("in writeBinary: ", data.locale, "\t", data[d.low].locale, "\t", here);
+    // mystdout.flush();
     try this.lock(); defer { this.unlock(); }
     const tSize = c_sizeof(t) : c_ssize_t;
 
     // Allow either DefaultRectangular arrays or dense slices of DR arrays
     if !data._value.isDataContiguous(d._value) {
       err = "writeBinary() array data must be contiguous";
-    } else if data.locale.id != this._home.id {
+    } else if data[d.low].locale.id != this._home.id {
       err = "writeBinary() array data must be on same locale as 'fileWriter'";
     } else if isNativeEndianness(endian) {
       if data.size > 0 {
