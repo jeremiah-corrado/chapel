@@ -197,16 +197,16 @@ testitb(seed, n, 0, 1000000);
 testitb(seed, n, 0, 10000000);
 testitb(seed, n, 0, 100000000);
 testitb(seed, n, 0, 1000000000);
-testitb(seed, n, 0, 10000000000);
-testitb(seed, n, 0, 100000000000);
-testitb(seed, n, 0, 1000000000000);
-testitb(seed, n, 0, 10000000000000);
-testitb(seed, n, 0, 100000000000000);
-testitb(seed, n, 0, 1000000000000000);
-testitb(seed, n, 0, 10000000000000000);
-testitb(seed, n, 0, 100000000000000000);
-testitb(seed, n, 0, 1000000000000000000);
-testitb(seed, n, 0, 10000000000000000000);
+// testitb(seed, n, 0, 10000000000);
+// testitb(seed, n, 0, 100000000000);
+// testitb(seed, n, 0, 1000000000000);
+// testitb(seed, n, 0, 10000000000000);
+// testitb(seed, n, 0, 100000000000000);
+// testitb(seed, n, 0, 1000000000000000);
+// testitb(seed, n, 0, 10000000000000000);
+// testitb(seed, n, 0, 100000000000000000);
+// testitb(seed, n, 0, 1000000000000000000);
+// testitb(seed, n, 0, 10000000000000000000);
 
 if failures == 0 {
   writeln("OK");

@@ -2574,7 +2574,7 @@ module Random {
 
       // state
       var PCGRandomStreamPrivate_rngs: numGenerators(eltType) * pcg_setseq_64_xsh_rr_32_rng;
-      var PCGRandomStreamPrivate_count: int(64) = 1;
+      var PCGRandomStreamPrivate_count: int(64) = 0;
 
       proc init(type eltType,
                 seed: int(64) = _SeedGenerator.currentTime) {
@@ -2585,7 +2585,7 @@ module Random {
           param inc = pcg_getvalid_inc(i+1);
           PCGRandomStreamPrivate_rngs[i].srandom(seed:uint(64), inc);
         }
-        PCGRandomStreamPrivate_count = 1;
+        PCGRandomStreamPrivate_count = 0;
       }
 
       proc ref PCGRandomStreamPrivate_getNext_noLock(type resultType) {
@@ -2599,12 +2599,12 @@ module Random {
         // If the resultType is a type that fits into
         PCGRandomStreamPrivate_count += 1;
         return randlc_bounded(resultType, PCGRandomStreamPrivate_rngs,
-                              seed, PCGRandomStreamPrivate_count-1, min, max);
+                              seed, PCGRandomStreamPrivate_count, min, max);
       }
 
       proc ref PCGRandomStreamPrivate_skipToNth_noLock(in n: integral) {
-        PCGRandomStreamPrivate_count = n+1;
-        PCGRandomStreamPrivate_rngs = randlc_skipto(eltType, seed, n+1);
+        PCGRandomStreamPrivate_count = n;
+        PCGRandomStreamPrivate_rngs = randlc_skipto(eltType, seed, n);
       }
 
       /*
@@ -2955,7 +2955,7 @@ module Random {
       proc ref _iterateStart(D: domain): int {
         const start = PCGRandomStreamPrivate_count;
         PCGRandomStreamPrivate_count += D.sizeAs(int);
-        PCGRandomStreamPrivate_skipToNth_noLock(PCGRandomStreamPrivate_count-1);
+        PCGRandomStreamPrivate_skipToNth_noLock(PCGRandomStreamPrivate_count);
         return start;
       }
       pragma "fn returns iterator"
@@ -3084,7 +3084,7 @@ module Random {
       return states[1].random(pcg_getvalid_inc(2));
     }
     // returns x with 0 <= x <= bound
-    // count is 1-based
+    // count is 0-based
     private inline
     proc boundedrand32_1(ref states, seed:int(64), count:int(64),
                          bound:uint(32)):uint(32) {
@@ -3092,11 +3092,11 @@ module Random {
       if bound == max(uint(32)) then return rand32_1(states);
       else return states[0].bounded_random_vary_inc(
           pcg_getvalid_inc(1), bound + 1,
-          seed:uint(64), (count - 1):uint(64),
+          seed:uint(64), count:uint(64),
           101, 4);
     }
     // returns x with 0 <= x <= bound
-    // count is 1-based
+    // count is 0-based
     private inline
     proc boundedrand32_2(ref states, seed:int(64), count:int(64),
                          bound:uint(32)):uint(32) {
@@ -3104,7 +3104,7 @@ module Random {
       if bound == max(uint(32)) then return rand32_2(states);
       else return states[1].bounded_random_vary_inc(
           pcg_getvalid_inc(2), bound + 1,
-          seed:uint(64), (count - 1):uint(64),
+          seed:uint(64), count:uint(64),
           102, 4);
     }
 
@@ -3256,7 +3256,7 @@ module Random {
       for param i in 0..states.size-1 {
         param inc = pcg_getvalid_inc(i+1);
         states[i].srandom(seed:uint(64), inc);
-        states[i].advance(inc, (n - 1):uint(64));
+        states[i].advance(inc, n:uint(64));
       }
       return states;
     }
