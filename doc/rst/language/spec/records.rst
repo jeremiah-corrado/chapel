@@ -508,6 +508,17 @@ implement an ``init=`` method with the same signature.
   authors take responsibility for both ``init=`` and ``=`` implementations, or
   neither implementation.
 
+  An assignment operator for `R` can be defined as follows:
+
+  .. code-block:: chapel
+
+      operator =(lhs: R, rhs: R) {
+         lhs.x = rhs.x;
+         lhs.y = rhs.y;
+         lhs.z = rhs.z;
+         writeln("assigned R!");
+      }
+
 A user may indicate that a type is not copyable by adding a where-clause to
 the ``init=`` implementation that evaluates to ``false``:
 
